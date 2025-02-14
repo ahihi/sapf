@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -25,8 +25,20 @@ jobs:
       if: runner.os == 'macOS'
       run: .github/scripts/install-macos-deps.sh
 
-    - name: Setup
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      run: .github\scripts\install-windows-deps.ps1
+
+    - name: Setup [Unix]
+      if: runner.os != 'Windows'
       run: meson setup build
+
+    - name: Setup [Windows]
+      if: runner.os == 'Windows'
+      run: |
+        Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+        refreshenv
+        meson setup build
 
     - name: Compile
       run: meson compile -C build
