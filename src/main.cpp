@@ -36,6 +36,7 @@
 #ifdef SAPF_MANTA
 #include "Manta.h"
 
+
 class MyManta : public Manta
 {
 	virtual void PadEvent(int row, int column, int id, int value) {

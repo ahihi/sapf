@@ -21,10 +21,8 @@
 #ifdef SAPF_ACCELERATE
 #include <Accelerate/Accelerate.h>
 #else
-// TODO
+#include <Eigen/Dense>
 #endif
-
-
 
 V BinaryOp::makeVList(Thread& th, Arg a, Arg b)
 {
@@ -951,6 +949,31 @@ DEFINE_BINOP_FLOAT_STRING(cmp,  sc_cmp(a, b), sc_sgn(strcmp(a, b)))
 DEFINE_BINOP_FLOATVV1(copysign, copysign(a, b), vvcopysign(out, const_cast<Z*>(aa), bb, &n)) // bug in vForce.h requires const_cast
 DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*>(aa), bb, &n)) // bug in vForce.h requires const_cast
 
+#ifndef SAPF_ACCELERATE
+
+	#if SAMPLE_IS_DOUBLE
+		typedef Eigen::Map<Eigen::ArrayXd, 0, Eigen::InnerStride<>> ZArr;
+	#else
+		typedef Eigen::Map<Eigen::ArrayXf, 0, Eigen::InnerStride<>> ZArr;
+	#endif
+
+	ZArr zarr(const Z *vec, int n, int stride) {
+		#if SAMPLE_IS_DOUBLE
+			return ZArr((double *)vec, n, Eigen::InnerStride<>(stride));
+		#else
+			return ZArr((float *)vec, n, Eigen::InnerStride<>(stride));
+		#endif
+	}
+
+	#define ZARR_OP(op, n, aa, astride, bb, bstride, out) \
+		do { \
+			const ZArr A = zarr(aa, n, astride); \
+			const ZArr B = zarr(bb, n, bstride); \
+			ZArr R = zarr(out, n, 1); \
+			R = op; \
+		} while (0)
+#endif
+
 // identity optimizations of basic operators.
 
 	struct BinaryOp_plus : public BinaryOp {
@@ -965,29 +988,28 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsaddD(const_cast<Z*>(bb), bstride, const_cast<Z*>(aa), out, 1, n);
 #else
-                                        LOOP(i,n) { Z b = *bb; Z a = *aa; out[i] = b + a; bb += bstride; }
+					ZARR_OP(A + B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else if (bstride == 0 ) {
 				if (*bb == 0.) {
 					memcpy(out, aa, n * sizeof(Z));
-					//LOOP(i,n) { out[i] = *aa; aa += bstride; }
 				} else {
 #ifdef SAPF_ACCELERATE
 					vDSP_vsaddD(const_cast<Z*>(aa), astride, const_cast<Z*>(bb), out, 1, n);
 #else
-                                        LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a + b; aa += astride; }
+                    ZARR_OP(A + B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else {
 #ifdef SAPF_ACCELERATE
 				vDSP_vaddD(aa, astride, bb, bstride, out, 1, n);
 #else
-				LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a + b; aa += astride; bb += bstride; }
+					ZARR_OP(A + B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 			}
-		}
-		virtual void pairsz(int n, Z& z, Z *aa, int astride, Z *out) {
+        }
+        virtual void pairsz(int n, Z& z, Z *aa, int astride, Z *out) {
 			Z b = z;
 			LOOP(i,n) { Z a = *aa; out[i] = a + b; b = a; aa += astride; }
 			z = b;
@@ -1020,7 +1042,6 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 	BinaryOp* gBinaryOpPtr_plus = &gBinaryOp_plus;
 	BINARY_OP_PRIM(plus)
 
-
 	struct BinaryOp_plus_link : public BinaryOp {
 		virtual const char *Name() { return "plus"; }
 		virtual double op(double a, double b) { return a + b; }
@@ -1033,7 +1054,7 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsaddD(const_cast<Z*>(bb), bstride, const_cast<Z*>(aa), out, 1, n);
 #else
-                                        LOOP(i,n) { Z b = *bb; Z a = *aa; out[i] = b + a; bb += bstride; }
+					ZARR_OP(A + B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else if (bstride == 0 ) {
@@ -1044,14 +1065,14 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsaddD(const_cast<Z*>(aa), astride, const_cast<Z*>(bb), out, 1, n);
 #else
-                                        LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a + b; aa += astride; }
+					ZARR_OP(A + B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else {
 #ifdef SAPF_ACCELERATE
 				vDSP_vaddD(aa, astride, bb, bstride, out, 1, n);
 #else
-				LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a + b; aa += astride; bb += bstride; }
+				ZARR_OP(A + B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 			}
 		}
@@ -1088,7 +1109,6 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 	BinaryOp* gBinaryOpPtr_plus_link = &gBinaryOp_plus_link;
 	BINARY_OP_PRIM(plus_link)
 
-
 	struct BinaryOp_minus : public BinaryOp {
 		virtual const char *Name() { return "minus"; }
 		virtual double op(double a, double b) { return a - b; }
@@ -1097,14 +1117,13 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 				vDSP_vnegD(const_cast<Z*>(bb), bstride, out, 1, n);
 #else
-                                LOOP(i,n) { Z b = *bb; out[i] = -b; bb += bstride; }
+				ZARR_OP(A - B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				if (*aa != 0.) {
 #ifdef SAPF_ACCELERATE
 					vDSP_vsaddD(const_cast<Z*>(out), 1, const_cast<Z*>(aa), out, 1, n);
 #else
-                                        Z a = *aa;
-					LOOP(i,n) { out[i] += a; }
+					ZARR_OP(A - B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else if (bstride == 0 ) {
@@ -1114,14 +1133,14 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsaddD(const_cast<Z*>(out), 1, &b, out, 1, n);
 #else
-                                        LOOP(i,n) { out[i] += b; }
+					ZARR_OP(A - B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else {
 #ifdef SAPF_ACCELERATE
 				vDSP_vsubD(aa, astride, bb, bstride, out, 1, n);
 #else
-                                LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a - b; aa += astride; bb += bstride; }
+				ZARR_OP(A - B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 			}
 		}
@@ -1159,8 +1178,6 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 	BinaryOp* gBinaryOpPtr_minus = &gBinaryOp_minus;
 	BINARY_OP_PRIM(minus)
 
-
-
 	struct BinaryOp_mul : public BinaryOp {
 		virtual const char *Name() { return "mul"; }
 		virtual double op(double a, double b) { return a * b; }
@@ -1174,8 +1191,7 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsmulD(bb, bstride, aa, out, 1, n);
 #else
-                                        Z a = *aa;
-                                        LOOP(i,n) { Z b = *bb; out[i] = b * a; bb += bstride; }
+					ZARR_OP(A * B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else if (bstride == 0) {
@@ -1187,15 +1203,14 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsmulD(aa, astride, bb, out, 1, n);
 #else
-                                        Z b = *bb;
-                                        LOOP(i,n) { Z a = *aa; out[i] = a * b; aa += astride; }
+                    ZARR_OP(A * B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else {
 #ifdef SAPF_ACCELERATE
 				vDSP_vmulD(aa, astride, bb, bstride, out, 1, n);
 #else
-				LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a * b; aa += astride; bb += bstride; }
+				ZARR_OP(A * B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 			}
 		}
@@ -1249,7 +1264,6 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 	BinaryOp* gBinaryOpPtr_mul = &gBinaryOp_mul;
 	BINARY_OP_PRIM(mul)
 
-
 	struct BinaryOp_div : public BinaryOp {
 		virtual const char *Name() { return "div"; }
 		virtual double op(double a, double b) { return a / b; }
@@ -1264,14 +1278,14 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 #ifdef SAPF_ACCELERATE
 					vDSP_vsmulD(const_cast<Z*>(aa), astride, &rb, out, 1, n);
 #else
-                                        LOOP(i,n) { Z a = *aa; out[i] = a * rb; aa += astride; }
+                    ZARR_OP(A / B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 				}
 			} else {
 #ifdef SAPF_ACCELERATE
 				vDSP_vdivD(const_cast<Z*>(bb), bstride, const_cast<Z*>(aa), astride, out, 1, n);
 #else
-                                LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = a / b; aa += astride; bb += bstride; }
+                 ZARR_OP(A / B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE
 			}
 		}
@@ -1324,7 +1338,6 @@ DEFINE_BINOP_FLOATVV1(atan2, atan2(a, b), vvatan2(out, aa, bb, &n))
 	DEFINE_BINOP_FLOAT(Jn, jn((int)b, a))
 	DEFINE_BINOP_FLOAT(Yn, yn((int)b, a))
 #endif
-
 
 DEFINE_BINOP_FLOATVV(min, fmin(a, b), vDSP_vminD(const_cast<Z*>(aa), astride, const_cast<Z*>(bb), bstride, out, 1, n))
 DEFINE_BINOP_FLOATVV(max, fmax(a, b), vDSP_vmaxD(const_cast<Z*>(aa), astride, const_cast<Z*>(bb), bstride, out, 1, n))
