@@ -26,7 +26,9 @@
 #include <atomic>
 #include <thread>
 
+#include "AsyncAudioFileWriter.hpp"
 #include "SoundFiles.hpp"
+#include "Buffers.hpp"
 
 #if defined(SAPF_AUDIOTOOLBOX)
 static OSStatus inputCallback(
@@ -128,28 +130,6 @@ struct AUPlayerBackend
 
 typedef AUPlayerBackend PlayerBackend;
 
-class AUBuffers {
-public:
-	AUBuffers(AudioBufferList *inIoData)
-		: ioData(inIoData)
-	{}
-	
-	uint32_t count() {
-		return this->ioData->mNumberBuffers;
-	}
-	
-	float *data(int channel) {
-		return (float*) this->ioData->mBuffers[channel].mData;
-	}
-
-	uint32_t size(int channel) {
-		return this->ioData->mBuffers[channel].mDataByteSize;
-	}
-	
-	AudioBufferList *ioData;
-};
-
-typedef AUBuffers Buffers;
 #else
 int rtPlayerBackendCallback(
 	void *outputBuffer,
@@ -225,37 +205,12 @@ public:
 };
 
 typedef RtPlayerBackend PlayerBackend;
-
-class RtBuffers {
-public:
-	RtBuffers(float *inOut, uint32_t inCount, uint32_t inSize)
-		: out(inOut), theCount(inCount), theSize(inSize)
-	{}
-	
-	uint32_t count() {
-		return this->theCount;
-	}
-	
-	float *data(int channel) {
-		return this->out + channel * this->theSize;
-	}
-
-	uint32_t size(int channel) {
-		return this->theSize;
-	}
-	
-	float *out;
-	uint32_t theCount;
-	uint32_t theSize;
-};
-
-typedef RtBuffers Buffers;
 #endif
 
 const int kMaxChannels = 32;
 
 struct Player {
-	Player(Thread& inThread, int numChannels);
+	Player(Thread& inThread, int numChannels, std::string path = "");
 	~Player();
 
 	int numChannels();
@@ -270,17 +225,19 @@ struct Player {
 	PlayerBackend backend;
 	// AudioComponentInstance outputUnit;
 	ZIn in[kMaxChannels];
-	// ExtAudioFileRef xaf = nullptr;
-	std::string path; // recording file path
+	std::unique_ptr<AsyncAudioFileWriter> writer;
 };
 
 static bool fillBufferList(Player *player, int inNumberFrames, Buffers *buffers);
 
 struct Player* gAllPlayers = nullptr;
 
-Player::Player(Thread& inThread, int inNumChannels)
+Player::Player(Thread& inThread, int inNumChannels, std::string path)
 	: th(inThread), count(0), done(false), prev(nullptr), next(gAllPlayers), backend(inNumChannels)
 {
+	if (!path.empty()) {
+		writer = std::make_unique<AsyncAudioFileWriter>(path, vm.ar.sampleRate, inNumChannels);
+	}
 	this->backend.player = this;
 	gAllPlayers = this;
 	if (next) next->prev = this; 
@@ -315,6 +272,34 @@ void Player::stop() {
 pthread_mutex_t gPlayerMutex = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef SAPF_AUDIOTOOLBOX
+static void recordPlayer(AUPlayer* player, int inNumberFrames, AudioBufferList const* inData)
+{
+	if (!player->xaf) return;
+
+	OSStatus err = ExtAudioFileWriteAsync(player->xaf, inNumberFrames, inData); // initialize async.
+	if (err) printf("ExtAudioFileWriteAsync err %d\n", (int)err);
+}
+
+
+static AudioComponentInstance openAU(UInt32 inType, UInt32 inSubtype, UInt32 inManuf)
+{
+	AudioComponentDescription desc;
+	desc.componentType = inType;
+	desc.componentSubType = inSubtype;
+	desc.componentManufacturer = inManuf;
+	desc.componentFlags = 0;
+	desc.componentFlagsMask = 0;
+
+	AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
+	if (!comp) {
+		return nullptr;
+	}
+
+	AudioComponentInstance au = nullptr;
+	AudioComponentInstanceNew(comp, &au);
+
+	return au;
+}
 static OSStatus inputCallback(	void *							inRefCon,
 	AudioUnitRenderActionFlags *	ioActionFlags,
 	const AudioTimeStamp *			inTimeStamp,
@@ -335,6 +320,10 @@ static OSStatus inputCallback(	void *							inRefCon,
 	return noErr;
 }
 #else
+static void recordPlayer(const Player& player, const int nBufferFrames, const RtBuffers& buffers) {
+	if (!player.writer) return;
+	player.writer->writeAsync(buffers, nBufferFrames);
+}
 int rtPlayerBackendCallback(
 	void *outputBuffer,
 	void *inputBuffer,
@@ -352,7 +341,7 @@ int rtPlayerBackendCallback(
 	}
 
 	bool done = fillBufferList(player, nBufferFrames, &buffers);
-	// recordPlayer(player, inNumberFrames, ioData);
+	recordPlayer(*player, nBufferFrames, buffers);
 
 	if (done) {
 		player->done = true;
@@ -458,39 +447,6 @@ static void* stopDonePlayers(void* x)
 	}
 	return nullptr;
 }
-
-#ifdef SAPF_AUDIOTOOLBOX
-
-static void recordPlayer(AUPlayer* player, int inNumberFrames, AudioBufferList const* inData)
-{
-	if (!player->xaf) return;
-		
-	OSStatus err = ExtAudioFileWriteAsync(player->xaf, inNumberFrames, inData); // initialize async.
-	if (err) printf("ExtAudioFileWriteAsync err %d\n", (int)err);
-}
-
-
-static AudioComponentInstance openAU(UInt32 inType, UInt32 inSubtype, UInt32 inManuf)
-{
-    AudioComponentDescription desc;
-    desc.componentType = inType;
-    desc.componentSubType = inSubtype;
-    desc.componentManufacturer = inManuf;
-    desc.componentFlags = 0;
-    desc.componentFlagsMask = 0;
-
-    AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
-	if (!comp) {
-		return nullptr;
-	}
-
-    AudioComponentInstance au = nullptr;
-    AudioComponentInstanceNew(comp, &au);
-	
-	return au;
-}
-
-#endif // SAPF_AUDIOTOOLBOX
 
 void playWithPlayer(Thread& th, V& v)
 {
@@ -616,7 +572,56 @@ void recordWithPlayer(Thread& th, V& v, Arg filename)
 		}
 	}
 #else
-        // TODO: cross platform playback
+	if (!v.isList()) wrongType("play : s", "List", v);
+
+	Locker lock(&gPlayerMutex);
+
+	Player *player;
+
+	char path[1024];
+
+	if (v.isZList()) {
+		makeRecordingPath(filename, path, 1024);
+		player = new Player(th, 1, path);
+		player->in[0].set(v);
+	} else {
+		if (!v.isFinite()) indefiniteOp("play : s", "");
+		P<List> s = (List*)v.o();
+		s = s->pack(th, kMaxChannels);
+		if (!s()) {
+			post("Too many channels. Max is %d.\n", kMaxChannels);
+			return;
+		}
+		Array* a = s->mArray();
+
+		int numChannels = (int)a->size();
+
+		makeRecordingPath(filename, path, 1024);
+
+		player = new Player(th, numChannels, path);
+		for (int i = 0; i < numChannels; ++i) {
+			player->in[i].set(a->at(i));
+		}
+		s = nullptr;
+		a = nullptr;
+	}
+	v.o = nullptr; // try to prevent leak.
+
+	std::atomic_thread_fence(std::memory_order_seq_cst);
+
+	if (!gWatchdogRunning) {
+		pthread_create(&watchdog, nullptr, stopDonePlayers, nullptr);
+		gWatchdogRunning = true;
+	}
+
+	{
+		int32_t err{errNone};
+		err = player->createGraph();
+		if (err) {
+			post("play failed: %d '%4.4s'\n", (int)err, (char*)&err);
+			throw errFailed;
+		}
+	}
 #endif // SAPF_AUDIOTOOLBOX
 }
 

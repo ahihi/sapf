@@ -36,6 +36,14 @@ int SndfileSoundFile::pull(uint32_t *framesRead, PortableBuffers& buffers) {
 	return result;
 }
 
+void SndfileSoundFile::write(const int numFrames, const PortableBuffers& bufs)
+{
+	if (const auto written{sf_write_float(mSndfile, (const float*) bufs.buffers[0].data, numFrames * bufs.buffers[0].numChannels)}; written <= 0) {
+		const auto error{sf_strerror(mSndfile)};
+		printf("failed to write audio data to file - %s\n", error);
+	}
+}
+
 std::unique_ptr<SndfileSoundFile> SndfileSoundFile::open(const char *path) {
 	SNDFILE *sndfile = nullptr;
 	SF_INFO sfinfo = {0};
@@ -58,68 +66,25 @@ std::unique_ptr<SndfileSoundFile> SndfileSoundFile::open(const char *path) {
 	return std::make_unique<SndfileSoundFile>(sndfile, numChannels);
 }
 
+// NOTE: ATTOW, interleaved is always passed as true, and
+//  the fileSampleRate is always passed as 0, so the thread sample rate is always used.
+//  (>sf / >sfo doesn't even provide a way to specify the sample rate)
 std::unique_ptr<SndfileSoundFile> SndfileSoundFile::create(const char *path, int numChannels, double threadSampleRate, double fileSampleRate, bool interleaved) {
-	// if (fileSampleRate == 0.)
-	//	fileSampleRate = threadSampleRate;
+	if (fileSampleRate == 0.)
+		fileSampleRate = threadSampleRate;
 
-	// CFStringRef cfpath = CFStringCreateWithFileSystemRepresentation(0, path);
-	// if (!cfpath) {
-	//	post("failed to create path '%s'\n", path);
-	//	return nullptr;
-	// }
-	// CFReleaser cfpathReleaser(cfpath);
-	
-	// CFURLRef url = CFURLCreateWithFileSystemPath(0, cfpath, kCFURLPOSIXPathStyle, false);
-	// if (!url) {
-	//	post("failed to create url\n");
-	//	return nullptr;
-	// }
-	// CFReleaser urlReleaser(url);
-	
-	// AudioStreamBasicDescription fileFormat = {
-	//	fileSampleRate,
-	//	kAudioFormatLinearPCM,
-	//	kAudioFormatFlagsNativeFloatPacked,
-	//	static_cast<UInt32>(sizeof(float) * numChannels),
-	//	1,
-	//	static_cast<UInt32>(sizeof(float) * numChannels),
-	//	static_cast<UInt32>(numChannels),
-	//	32,
-	//	0
-	// };
-	
-	// int interleavedChannels = interleaved ? numChannels : 1;
-	// UInt32 interleavedBit = interleaved ? 0 : kAudioFormatFlagIsNonInterleaved;
-	
-	// AudioStreamBasicDescription clientFormat = {
-	//	threadSampleRate,
-	//	kAudioFormatLinearPCM,
-	//	kAudioFormatFlagsNativeFloatPacked | interleavedBit,
-	//	static_cast<UInt32>(sizeof(float) * interleavedChannels),
-	//	1,
-	//	static_cast<UInt32>(sizeof(float) * interleavedChannels),
-	//	static_cast<UInt32>(numChannels),
-	//	32,
-	//	0
-	// };
-		
-	// ExtAudioFileRef xaf;
-	// OSStatus err = ExtAudioFileCreateWithURL(url, kAudioFileWAVEType, &fileFormat, nullptr, kAudioFileFlags_EraseFile, &xaf);
-	
-	// if (err) {
-	//	post("failed to create file '%s'. err: %d\n", path, (int)err);
-	//	return nullptr;
-	// }
-	
-	// err = ExtAudioFileSetProperty(xaf, kExtAudioFileProperty_ClientDataFormat, sizeof(clientFormat), &clientFormat);
-	// if (err) {
-	//	post("failed to set client data format\n");
-	//	ExtAudioFileDispose(xaf);
-	//	return nullptr;
-	// }
-	
-	// return new AudioToolboxSoundFile(xaf, numChannels);
+	SF_INFO sfinfo;
+	sfinfo.channels = numChannels;
+	sfinfo.samplerate = fileSampleRate;
+	sfinfo.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
 
-	return std::make_unique<SndfileSoundFile>(nullptr, numChannels);
+	const auto sndfile{sf_open(path, SFM_WRITE, &sfinfo)};
+    if (!sndfile) {
+		const auto error{sf_strerror(sndfile)};
+        printf("failed to open %s: %s\n", path, error);
+        throw errNotFound;
+    }
+
+	return std::make_unique<SndfileSoundFile>(sndfile, numChannels);
 }
 #endif // SAPF_AUDIOTOOLBOX

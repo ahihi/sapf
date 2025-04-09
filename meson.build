@@ -36,6 +36,8 @@ sources = [
   'src/Types.cpp',
   'src/UGen.cpp',
   'src/VM.cpp',
+  'src/Buffers.cpp',
+  'src/AsyncAudioFileWriter.cpp',
 ]
 deps = []
 cpp_args = ['-std=c++17']
@@ -138,7 +140,7 @@ executable(
   release_sources,
   include_directories: [include_directories('include')],
   dependencies: deps,
-  cpp_args : cpp_args + ['-march==x86-64'],
+  cpp_args : cpp_args + ['-march=x86-64'],
   link_args : link_args,
   build_by_default: false
 )
@@ -189,7 +191,11 @@ executable(
 
 # tests
 test_deps = deps + dependency('doctest', required: true)
-test_sources = sources + 'test/test_MathOps.cpp'
+test_sources = sources + [
+    'test/test_MathOps.cpp',
+    'test/test_AsyncAudioFileWriter.cpp',
+    'test/test_SndfileSoundFile.cpp',
+]
 
 # Just like the main executable, this respects the buildtype param. The target architecture is
 # omitted if it's a debug build, ensuring the best debugging experience

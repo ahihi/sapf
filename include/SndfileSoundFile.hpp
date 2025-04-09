@@ -14,6 +14,11 @@ public:
 
 	uint32_t numChannels();
 	int pull(uint32_t *framesRead, PortableBuffers& buffers);
+	// write to file synchronously (blocking)
+	// bufs is expected to contain only a single buffer with the specified number of channels
+	// and the buffer data already interleaved (for wav output), as floats. It should have
+	// the exact amount of frames as indicated by numFrames.
+	void write(const int numFrames, const PortableBuffers& bufs);
 	
 	SNDFILE *mSndfile;
 	std::vector<double> mBufInterleaved;
