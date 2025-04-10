@@ -6,6 +6,12 @@ this is a highly work-in-progress fork of James McCartney's [sapf](https://githu
 
 ## building
 
+Ensure submodules are initialized if you didn't clone with `--recursive`:
+```shell
+git submodule init
+git submodule update
+```
+
 a Nix flake is included. simply run:
 
 ```shell
@@ -65,6 +71,21 @@ Note there is currently a feature request for doctest for better integration
 with meson but it is not yet implemented ATTOW: https://github.com/doctest/doctest/issues/531
 This seems to be why the default meson test report isn't that useful.
 
+## Sanitizers
+
+You can build and run tests / the program itself with [Google Sanitizers](https://github.com/google/sanitizers) enabled
+via meson option:
+```shell
+# on a new setup
+meson setup build -Dasan=true
+
+#on an existing setup
+meson configure -Dasan=true build
+```
+
+See `meson.options` for the available sanitizers. Note that only asan/ubsan will work on windows on
+the msys2/clang64 environment (other msys2 environments don't support any sanitizers).
+
 ## Windows Usage Caveats
 
 Windows support is currently WIP. The following current "quirks" apply:
@@ -75,50 +96,61 @@ Windows support is currently WIP. The following current "quirks" apply:
 
 ## Windows Build + Development
 
-Windows support is achieved by building via [msys2](https://www.msys2.org/) (using mingw-w64-ucrt6) as opposed to building natively on Windows (probably possible but probably much more annoying).
+Windows support is achieved by building via [msys2](https://www.msys2.org/) (using mingw-w64-clang-x86_64) 
+as opposed to building natively on Windows (probably possible but probably much more annoying).
+We specifically use the clang version of msys2 for [compatibility with Google Analyzers](https://github.com/msys2/MINGW-packages/issues/3163#issuecomment-2451639935)
+which are recommended for writing more robust C++ code.
+Note that only asan/ubsan will work on windows on
+this environment (other msys2 environments don't even support any sanitizers).
 
-If you're for some reason not on x86_64, you'll have to replace any of the below references to that architecture
-with your own! You can find and view info on packages on [msys2 packages](https://packages.msys2.org/queue) to see
-if the package exists for your architecture. 
+If you're for some reason not on x86_64 or you don't want to use the clang-based toolchain, 
+you'll have to replace any of the below references to that architecture with your own! 
+You can find and view info on packages on [msys2 packages](https://packages.msys2.org/queue) to see if the package exists for your architecture / toolchain. 
 
 1. Install [msys2](https://www.msys2.org/). Make sure to keep track of where you installed it as this will be where your
 "root directory" is for your msys2 / mingw64 shells. For this guide we will assume the default of `C:\msys64`
 2. If you haven't yet, clone or copy this repo somewhere inside the msys2 install. For example within the msys2 shell you could install git via
 `pacman -S git` and then git clone this repo into your "home" folder.
-3. Open a msys2 (ucrt) shell and install some needed development dependencies.
+3. From here on out, always use the clang64 shell (clang64.exe in your msys2 folder).
+4. Open your clang64 shell and install some needed development dependencies.
     (Note the ca-certificates are required in order to download the gtest wrap, and in general you'll
     have a bad time doing anything on msys2 without these certs.)
    ```shell
    # press ENTER when prompted to choose "all"
    pacman -S --needed base-devel \
-    mingw-w64-ucrt-x86_64-toolchain
+    mingw-w64-clang-x86_64-toolchain
    pacman -S \
-    mingw-w64-ucrt-x86_64-meson \
-    mingw-w64-ucrt-x86_64-fftw \
-    mingw-w64-ucrt-x86_64-libsndfile \
-    mingw-w64-ucrt-x86_64-pkgconf \
-    mingw-w64-ucrt-x86_64-rtaudio \
-    mingw-w64-ucrt-x86_64-readline \
+    mingw-w64-clang-x86_64-meson \
+    mingw-w64-clang-x86_64-fftw \
+    mingw-w64-clang-x86_64-libsndfile \
+    mingw-w64-clang-x86_64-pkgconf \
+    mingw-w64-clang-x86_64-rtaudio \
+    mingw-w64-clang-x86_64-readline \
     mingw-w64-ucrt-x86_64-xsimd \
-    mingw-w64-ucrt-x86_64-ca-certificates
+    mingw-w64-clang-x86_64-ca-certificates
    ```
-4. Close and reopen the shell to ensure it loads everything you just installed. 
-5. Now we can try to build in the msys2 (ucrt) shell.
+5. Close and reopen the shell to ensure it loads everything you just installed. 
+6. Now we can try to build in the clang64 shell.
 Navigate to the root directory of this repo.
-6.  ```shell
+7. ```shell
     # remove --buildtype release to build an unoptimized exe with debug symbols
     meson setup --buildtype release build 
     meson compile -C build
     ```
-7. You should see `sapf.exe` is created under the `${workspaceFolder}/build` directory.
-8. You need all the required DLLs in order to run it via Windows. Go to your msys2 folder `C:\msys64\ucrt64\bin`
+8. You should see `sapf.exe` is created under the `${workspaceFolder}/build` directory.
+9. You need all the required DLLs in order to run it via Windows. Go to your clang64 folder `C:\msys64\clang64\bin`
 and copy all of the dlls that look like `lib*.dll` (i.e. libreadline8.dll, libogg-0.dll, etc...). This is
 more than needed but I'm not sure the exact subset of dlls needed yet.
-9. Now you can run the exe directly by clicking or via your preferred command prompt.
-10. Test if its all working with a simple command (you should hear audio out of your primary output device)
+10. Now you can run the exe directly by clicking or via your preferred command prompt.
+11. Test if its all working with a simple command (you should hear audio out of your primary output device)
 `15 .0 sinosc 200 * 300 + .0 sinosc .1 * play`
 
-When setting up your IDE, make sure it's using the ucrt64 libraries (C:\msys64\ucrt64\include)
-and binaries (C:\msys64\ucrt64\bin) for compilation / linking and NOT your native windows libraries / binaries.
+When setting up your IDE, make sure it's using the clang64 libraries (C:\msys64\clang64\include)
+and binaries (C:\msys64\clang64\bin) for compilation / linking and NOT your native windows libraries / binaries.
 
 See README_VSCODE.md for vscode-specific setup.
+
+# Acknowledgements
+
+Sample rate converter designed by Aleksey Vaneev of Voxengo.
+This is on non-OSX systems or when the AudioToolbox library is not available.

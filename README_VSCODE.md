@@ -1,13 +1,13 @@
 # VS Code Development Setup
 
-The trick to making it work is to make sure VSCode is using the ucrt64 binaries for the development toolchain,
+The trick to making it work is to make sure VSCode is using the clang64 binaries for the development toolchain,
 NOT anything installed natively to Windows.
 
 1. Install C/C++ extensions for VSCode.
 2. Install Meson extension for VSCode.
-3. In the settings for Meson, set Meson build path to `C:\msys64\ucrt64\bin\meson` and
+3. In the settings for Meson, set Meson build path to `C:\msys64\clang64\bin\meson` and
 set the Build folder to `build`.
-4. Add your `C:\msys64\ucrt\bin` folder to your Path (via Environment Variables).
+4. Add your `C:\msys64\clang64\bin` folder to your Path (via Environment Variables).
 5. Open a windows terminal and make sure that `gcc --version` and `g++ --version` and `gdb --version` return
 a version string. You can also confirm with `where gcc` that it's using the binary within msys2.
 6. Before opening the folder in vscode, create a `.vscode` subdolder and populate it with some files. See the below "Config files" section for some example config files. Tweak the paths to match your own system.
@@ -25,15 +25,15 @@ how to get the "launch" version working - it runs but the text is garbled - like
 
 #### Config files
 Below setup uses clang but it should work with other toolchains
-(clang can be installed via msys2's `mingw-w64-ucrt-x86_64-clang` package)
+(clang can be installed via msys2's `mingw-w64-clang-x86_64-clang` package)
 Example `.vscode/c_cpp_properties.json`
 ```json
 {
     "configurations": [
         {
-            "name": "ucrt64",
+            "name": "clang64",
             "includePath": [
-                "C:/msys64/ucrt64/include/**",
+                "C:/msys64/clang64/include/**",
                 "${workspaceFolder}/**"
             ],
             "defines": [
@@ -41,7 +41,7 @@ Example `.vscode/c_cpp_properties.json`
                 "UNICODE",
                 "_UNICODE"
             ],
-            "compilerPath": "C:/msys64/ucrt64/bin/clang++.exe",
+            "compilerPath": "C:/msys64/clang64/bin/clang++.exe",
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c17",
             "cppStandard": "c++17",
@@ -64,7 +64,7 @@ Example `.vscode/launch.json`
             "request": "attach",
             "program": "${workspaceRoot}/build/sapf.exe",
             "MIMode": "gdb",
-            "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe",
+            "miDebuggerPath": "C:\\msys64\\clang64\\bin\\gdb.exe",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -87,13 +87,13 @@ Example `.vscode/launch.json`
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}/build",
             "environment": [
-                { "name": "MSYSTEM", "value": "UCRT64" },
+                { "name": "MSYSTEM", "value": "CLANG64" },
                 { "name": "MSYS2_PATH_TYPE", "value": "inherit" },
-                { "name": "PATH", "value": "C:\\msys64\\ucrt64\\bin;${env:PATH}" }
+                { "name": "PATH", "value": "C:\\msys64\\clang64\\bin;${env:PATH}" }
             ],
             "externalConsole": false,
             "MIMode": "gdb",
-            "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe",
+            "miDebuggerPath": "C:\\msys64\\clang64\\bin\\gdb.exe",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -116,13 +116,13 @@ Example `.vscode/launch.json`
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}/build",
             "environment": [
-                { "name": "MSYSTEM", "value": "UCRT64" },
+                { "name": "MSYSTEM", "value": "CLANG64" },
                 { "name": "MSYS2_PATH_TYPE", "value": "inherit" },
-                { "name": "PATH", "value": "C:\\msys64\\ucrt64\\bin;${env:PATH}" }
+                { "name": "PATH", "value": "C:\\msys64\\clang64\\bin;${env:PATH}" }
             ],
             "externalConsole": false,
             "MIMode": "gdb",
-            "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe",
+            "miDebuggerPath": "C:\\msys64\\clang64\\bin\\gdb.exe",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",

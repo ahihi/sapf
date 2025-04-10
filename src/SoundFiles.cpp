@@ -185,7 +185,7 @@ void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 #ifdef SAPF_AUDIOTOOLBOX
 	std::unique_ptr<SoundFile> soundFile = SoundFile::open(path, th.rate.sampleRate);
 #else
-	std::unique_ptr<SoundFile> soundFile = SoundFile::open(path);
+	std::unique_ptr<SoundFile> soundFile = SoundFile::open(path, th.rate.sampleRate, th.rate.blockSize);
 #endif
 
 	if(soundFile != nullptr) {
