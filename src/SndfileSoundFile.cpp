@@ -36,7 +36,7 @@ int SndfileSoundFile::pull(uint32_t *framesRead, PortableBuffers& buffers) {
 	return result;
 }
 
-std::unique_ptr<SndfileSoundFile> SndfileSoundFile::open(const char *path) {
+std::unique_ptr<SndfileSoundFile> SndfileSoundFile::open(const char *path, double threadSampleRate) {
 	SNDFILE *sndfile = nullptr;
 	SF_INFO sfinfo = {0};
 		

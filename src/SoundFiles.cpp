@@ -182,7 +182,7 @@ void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 {
 	const char* path = ((String*)filename.o())->s;
 
-	std::unique_ptr<SoundFile> soundFile = SoundFile::open(path);
+	std::unique_ptr<SoundFile> soundFile = SoundFile::open(path, th.rate.sampleRate);
 
 	if(soundFile != nullptr) {
 		SFReader* sfr = new SFReader(std::move(soundFile), -1);
@@ -272,7 +272,7 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 			minn = std::min(n, minn);
 		}
 
-		bufs.setSize(0, minn * sizeof(float));
+		bufs.setSize(0, numChannels * minn * sizeof(float));
 		// TODO: move into a SoundFile method
 #ifdef SAPF_AUDIOTOOLBOX
 		OSStatus err = ExtAudioFileWrite(soundFile->mXAF, minn, bufs.abl);

@@ -1,8 +1,9 @@
+#include <SoundFiles.hpp>
 #ifdef SAPF_AUDIOTOOLBOX
 #include "AudioToolboxSoundFile.hpp"
 
-AudioToolboxSoundFile::AudioToolboxSoundFile(ExtAudioFileRef inXAF, uint32_t inNumChannels)
-	: mXAF(inXAF), mNumChannels(inNumChannels)
+AudioToolboxSoundFile::AudioToolboxSoundFile(ExtAudioFileRef inXAF, uint32_t inNumChannels, std::string inPath)
+	: mXAF(inXAF), mNumChannels(inNumChannels), mPath(inPath)
 {}
 
 AudioToolboxSoundFile::~AudioToolboxSoundFile() {
@@ -17,7 +18,7 @@ int AudioToolboxSoundFile::pull(uint32_t *framesRead, AudioBuffers& buffers) {
 	return ExtAudioFileRead(this->mXAF, framesRead, buffers.abl);
 }
 
-AudioToolboxSoundFile *AudioToolboxSoundFile::open(const char *path) {
+std::unique_ptr<AudioToolboxSoundFile> AudioToolboxSoundFile::open(const char* path, const double theadSampleRate) {
 	CFStringRef cfpath = CFStringCreateWithFileSystemRepresentation(0, path);
 	if (!cfpath) {
 		post("failed to create path\n");
@@ -51,7 +52,7 @@ AudioToolboxSoundFile *AudioToolboxSoundFile::open(const char *path) {
 	int numChannels = fileFormat.mChannelsPerFrame;
 
 	AudioStreamBasicDescription clientFormat = {
-		th.rate.sampleRate,
+		theadSampleRate,
 		kAudioFormatLinearPCM,
 		kAudioFormatFlagsNativeFloatPacked | kAudioFormatFlagIsNonInterleaved,
 		static_cast<UInt32>(sizeof(double)),
@@ -69,17 +70,19 @@ AudioToolboxSoundFile *AudioToolboxSoundFile::open(const char *path) {
 		return {};
 	}
 	
-	err = ExtAudioFileSeek(xaf, offset);
+	err = ExtAudioFileSeek(xaf, 0);
 	if (err) {
 		post("seek failed %d\n", (int)err);
 		ExtAudioFileDispose(xaf);
 		return {};
 	}
 
-	return std::make_unique<AudioToolboxSoundFile>(xaf, numChannels);
+	return std::make_unique<AudioToolboxSoundFile>(xaf, numChannels, path);
 }
 
-AudioToolboxSoundFile *AudioToolboxSoundFile::create(const char *path, int numChannels, double threadSampleRate, double fileSampleRate, bool interleaved) {
+std::unique_ptr<AudioToolboxSoundFile> AudioToolboxSoundFile::create(const char* path, int numChannels,
+                                                                     double threadSampleRate, double fileSampleRate,
+                                                                     bool interleaved) {
 	if (fileSampleRate == 0.)
 		fileSampleRate = threadSampleRate;
 
@@ -139,6 +142,6 @@ AudioToolboxSoundFile *AudioToolboxSoundFile::create(const char *path, int numCh
 		return nullptr;
 	}
 	
-	return std::make_unique<AudioToolboxSoundFile>(xaf, numChannels);
+	return std::make_unique<AudioToolboxSoundFile>(xaf, numChannels, path);
 }
 #endif // SAPF_AUDIOTOOLBOX

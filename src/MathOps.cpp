@@ -1213,7 +1213,7 @@ DEFINE_BINOP_FLOATVV1(nextafter, nextafter(a, b), vvnextafter(out, const_cast<Z*
 				}
 			} else {
 #ifdef SAPF_ACCELERATE
-				vDSP_vsubD(aa, astride, bb, bstride, out, 1, n);
+				vDSP_vsubD(bb, bstride, aa, astride, out, 1, n);
 #else
 				ZARR_BINOP(A - B, n, aa, astride, bb, bstride, out);
 #endif // SAPF_ACCELERATE

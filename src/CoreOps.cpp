@@ -1322,8 +1322,7 @@ static void glob_(Thread& th, Prim* prim)
 {
 	P<String> pat = th.popString("glob : pattern");
 	
-	glob_t g;
-	memset(&g, 0, sizeof(g));
+	glob_t g = {};
 	glob(pat->s, GLOB_MARK, nullptr, &g);
 
         size_t count;

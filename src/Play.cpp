@@ -40,90 +40,15 @@ static OSStatus inputCallback(
 
 struct AUPlayerBackend
 {
-	AUPlayerBackend(int inNumChannels, ExtAudioFileRef inXAFRef = nullptr)
-		: player(nullptr), numChannels(inNumChannels), outputUnit(nullptr), xaf(inXAFRef)
-	{}
-	
-	~AUPlayerBackend() {
-		if (xaf) {
-			ExtAudioFileDispose(xaf);
-			char cmd[1100];
-			snprintf(cmd, 1100, "open \"%s\"", path.c_str());
-			system(cmd);
-		}
-	}
+	AUPlayerBackend(int inNumChannels);
+	~AUPlayerBackend();
 
-	int32_t createGraph() {
-		OSStatus err = noErr;
-		AudioComponentInstance outputUnit = openAU('auou', 'def ', 'appl');
-		if (!outputUnit) {
-			post("open output unit failed\n");
-			return 'fail';
-		}
-	
-		this->outputUnit = outputUnit;
-	
-		UInt32 flags = kAudioFormatFlagsNativeFloatPacked | kAudioFormatFlagIsNonInterleaved;
-		AudioStreamBasicDescription fmt = { vm.ar.sampleRate, kAudioFormatLinearPCM, flags, 4, 1, 4, (Uint32)this->numChannels, 32, 0 };
-
-		// mFormatID = 1819304813
-		// mFormatFlags = 41
-		// mSampleRate = 96000
-		// mBitsPerChannel = 32
-		// mBytesPerFrame = 4
-		// mChannelsPerFrame = 1
-		// mBytesPerPacket = 4
-		// mFramesPerPacket = 1
-	
-		err = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
-		if (err) {
-			post("set outputUnit client format failed\n");
-			return err;
-		}
-	
-		AURenderCallbackStruct cbs;
-		
-		cbs.inputProc = inputCallback;
-		cbs.inputProcRefCon = this->player;
-	
-		err = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cbs, sizeof(cbs));
-		if (err) {
-			post("set render callback failed\n");
-			return err;
-		}
-	
-		err = AudioUnitInitialize(outputUnit);
-		if (err) {
-			post("initialize output unit failed\n");
-			return err;
-		}
-	
-		err = AudioOutputUnitStart(outputUnit);
-		if (err) {
-			post("start output unit failed\n");
-			return err;
-		}
-	
-		post("start output unit OK\n");
-	
-		return noErr;
-	}
-
-	void stop() {
-		AudioComponentInstance outputUnit = this->outputUnit;
-		this->outputUnit = nullptr;
-		if (outputUnit) {
-			OSStatus err = AudioOutputUnitStop(outputUnit);
-			if (err) post("AudioOutputUnitStop err %d\n", (int)err);
-			err = AudioComponentInstanceDispose(outputUnit);
-			if (err) post("AudioComponentInstanceDispose outputUnit err %d\n", (int)err);
-		}
-	}
+	int32_t createGraph();
+	void stop();
 	
 	void *player;
 	int numChannels;
 	AudioComponentInstance outputUnit;
-	ExtAudioFileRef xaf = nullptr;
 };
 
 typedef AUPlayerBackend PlayerBackend;
@@ -255,13 +180,15 @@ typedef RtBuffers Buffers;
 const int kMaxChannels = 32;
 
 struct Player {
-	Player(Thread& inThread, int numChannels);
+	Player(const Thread& inThread, int numChannels, std::unique_ptr<SoundFile> soundFile);
+	// create without an output file
+	Player(const Thread& inThread, int numChannels);
 	~Player();
 
 	int numChannels();
 	int32_t createGraph();
 	void stop();
-	
+
 	Thread th;
 	int count; // unused?
 	bool done;
@@ -271,19 +198,123 @@ struct Player {
 	// AudioComponentInstance outputUnit;
 	ZIn in[kMaxChannels];
 	// ExtAudioFileRef xaf = nullptr;
-	std::string path; // recording file path
+	std::unique_ptr<SoundFile> soundFile;
 };
+
+#if defined(SAPF_AUDIOTOOLBOX)
+static AudioComponentInstance openAU(UInt32 inType, UInt32 inSubtype, UInt32 inManuf)
+{
+	AudioComponentDescription desc;
+	desc.componentType = inType;
+	desc.componentSubType = inSubtype;
+	desc.componentManufacturer = inManuf;
+	desc.componentFlags = 0;
+	desc.componentFlagsMask = 0;
+
+	AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
+	if (!comp) {
+		return nullptr;
+	}
+
+	AudioComponentInstance au = nullptr;
+	AudioComponentInstanceNew(comp, &au);
+
+	return au;
+}
+
+AUPlayerBackend::AUPlayerBackend(int inNumChannels)
+	: player(nullptr), numChannels(inNumChannels), outputUnit(nullptr)
+{}
+
+AUPlayerBackend::~AUPlayerBackend() {
+}
+
+int32_t AUPlayerBackend::createGraph() {
+	OSStatus err = noErr;
+	AudioComponentInstance outputUnit = openAU('auou', 'def ', 'appl');
+	if (!outputUnit) {
+		post("open output unit failed\n");
+		return 'fail';
+	}
+
+	this->outputUnit = outputUnit;
+
+	UInt32 flags = kAudioFormatFlagsNativeFloatPacked | kAudioFormatFlagIsNonInterleaved;
+	AudioStreamBasicDescription fmt = { vm.ar.sampleRate, kAudioFormatLinearPCM, flags, 4, 1, 4, (UInt32)this->numChannels, 32, 0 };
+
+	// mFormatID = 1819304813
+	// mFormatFlags = 41
+	// mSampleRate = 96000
+	// mBitsPerChannel = 32
+	// mBytesPerFrame = 4
+	// mChannelsPerFrame = 1
+	// mBytesPerPacket = 4
+	// mFramesPerPacket = 1
+
+	err = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
+	if (err) {
+		post("set outputUnit client format failed\n");
+		return err;
+	}
+
+	AURenderCallbackStruct cbs;
+
+	cbs.inputProc = inputCallback;
+	cbs.inputProcRefCon = this->player;
+
+	err = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cbs, sizeof(cbs));
+	if (err) {
+		post("set render callback failed\n");
+		return err;
+	}
+
+	err = AudioUnitInitialize(outputUnit);
+	if (err) {
+		post("initialize output unit failed\n");
+		return err;
+	}
+
+	err = AudioOutputUnitStart(outputUnit);
+	if (err) {
+		post("start output unit failed\n");
+		return err;
+	}
+
+	post("start output unit OK\n");
+
+	return noErr;
+}
+
+void AUPlayerBackend::stop() {
+	AudioComponentInstance outputUnit = this->outputUnit;
+	this->outputUnit = nullptr;
+	if (outputUnit) {
+		OSStatus err = AudioOutputUnitStop(outputUnit);
+		if (err) post("AudioOutputUnitStop err %d\n", (int)err);
+		err = AudioComponentInstanceDispose(outputUnit);
+		if (err) post("AudioComponentInstanceDispose outputUnit err %d\n", (int)err);
+	}
+}
+#endif
 
 static bool fillBufferList(Player *player, int inNumberFrames, Buffers *buffers);
 
 struct Player* gAllPlayers = nullptr;
 
-Player::Player(Thread& inThread, int inNumChannels)
-	: th(inThread), count(0), done(false), prev(nullptr), next(gAllPlayers), backend(inNumChannels)
+Player::Player(const Thread& inThread, const int numChannels, std::unique_ptr<SoundFile> soundFile)
+	: th(inThread), count(0), done(false), prev(nullptr), next(gAllPlayers), backend(numChannels), soundFile(std::move(soundFile))
 {
 	this->backend.player = this;
 	gAllPlayers = this;
 	if (next) next->prev = this; 
+}
+
+Player::Player(const Thread& inThread, const int numChannels)
+	: th(inThread), count(0), done(false), prev(nullptr), next(gAllPlayers), backend(numChannels), soundFile(nullptr)
+{
+	this->backend.player = this;
+	gAllPlayers = this;
+	if (next) next->prev = this;
 }
 
 Player::~Player() {
@@ -315,18 +346,20 @@ void Player::stop() {
 pthread_mutex_t gPlayerMutex = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef SAPF_AUDIOTOOLBOX
+static void recordPlayer(Player* player, int inNumberFrames, AudioBufferList const* inData);
+
 static OSStatus inputCallback(	void *							inRefCon,
-	AudioUnitRenderActionFlags *	ioActionFlags,
-	const AudioTimeStamp *			inTimeStamp,
-	UInt32							inBusNumber,
-	UInt32							inNumberFrames,
-	AudioBufferList *				ioData)
+	                              AudioUnitRenderActionFlags *	ioActionFlags,
+	                              const AudioTimeStamp *			inTimeStamp,
+	                              UInt32							inBusNumber,
+	                              UInt32							inNumberFrames,
+	                              AudioBufferList *				ioData)
 {
 	
 	Player* player = (Player*)inRefCon;
-	AUBuffers buffers(ioData);
+	Buffers buffers(ioData);
 		
-	bool done = fillBufferList(player, inNumberFrames, buffers);
+	bool done = fillBufferList(player, inNumberFrames, &buffers);
 	recordPlayer(player, inNumberFrames, ioData);
 
 	if (done) {
@@ -384,9 +417,9 @@ void stopPlayingIfDone()
 #ifdef SAPF_AUDIOTOOLBOX
     Locker lock(&gPlayerMutex);
 	
-	AUPlayer* player = gAllPlayers;
+	Player* player = gAllPlayers;
 	while (player) {
-		AUPlayer* next = player->next;
+		Player* next = player->next;
 		if (player->done)
 			stopPlayer(player);
 		player = next;
@@ -461,33 +494,12 @@ static void* stopDonePlayers(void* x)
 
 #ifdef SAPF_AUDIOTOOLBOX
 
-static void recordPlayer(AUPlayer* player, int inNumberFrames, AudioBufferList const* inData)
+static void recordPlayer(Player* player, int inNumberFrames, AudioBufferList const* inData)
 {
-	if (!player->xaf) return;
+	if (!player->soundFile) return;
 		
-	OSStatus err = ExtAudioFileWriteAsync(player->xaf, inNumberFrames, inData); // initialize async.
+	OSStatus err = ExtAudioFileWriteAsync(player->soundFile->mXAF, inNumberFrames, inData); // initialize async.
 	if (err) printf("ExtAudioFileWriteAsync err %d\n", (int)err);
-}
-
-
-static AudioComponentInstance openAU(UInt32 inType, UInt32 inSubtype, UInt32 inManuf)
-{
-    AudioComponentDescription desc;
-    desc.componentType = inType;
-    desc.componentSubType = inSubtype;
-    desc.componentManufacturer = inManuf;
-    desc.componentFlags = 0;
-    desc.componentFlagsMask = 0;
-
-    AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
-	if (!comp) {
-		return nullptr;
-	}
-
-    AudioComponentInstance au = nullptr;
-    AudioComponentInstanceNew(comp, &au);
-	
-	return au;
 }
 
 #endif // SAPF_AUDIOTOOLBOX
@@ -549,22 +561,22 @@ void recordWithPlayer(Thread& th, V& v, Arg filename)
 
 	Locker lock(&gPlayerMutex);
 	
-	AUPlayer *player;
+	Player *player;
 
 	char path[1024];
-	ExtAudioFileRef xaf = nullptr;
+	std::unique_ptr<SoundFile> soundfile = nullptr;
 	
 	if (v.isZList()) {
 		makeRecordingPath(filename, path, 1024);
-		xaf = sfcreate(th, path, 1, 0., false);
-		if (!xaf) {
+		soundfile = sfcreate(th, path, 1, 0., false);
+		if (!soundfile) {
 			printf("couldn't create recording file \"%s\"\n", path);
 			return;
 		}
 
-		player = new AUPlayer(th, 1, xaf);
+		player = new Player(th, 1, std::move(soundfile));
 		player->in[0].set(v);
-		player->numChannels = 1;
+		player->backend.numChannels = 1;
 	} else {
 		if (!v.isFinite()) indefiniteOp("play : s", "");
 		P<List> s = (List*)v.o();
@@ -578,13 +590,13 @@ void recordWithPlayer(Thread& th, V& v, Arg filename)
 		int numChannels = (int)a->size();
 
 		makeRecordingPath(filename, path, 1024);
-		xaf = sfcreate(th, path, numChannels, 0., false);
-		if (!xaf) {
+		soundfile = sfcreate(th, path, numChannels, 0., false);
+		if (!soundfile) {
 			printf("couldn't create recording file \"%s\"\n", path);
 			return;
 		}
 		
-		player = new AUPlayer(th, numChannels, xaf);
+		player = new Player(th, numChannels, std::move(soundfile));
 		for (int i = 0; i < numChannels; ++i) {
 			player->in[i].set(a->at(i));
 		}
@@ -593,10 +605,8 @@ void recordWithPlayer(Thread& th, V& v, Arg filename)
 	}
 	v.o = nullptr; // try to prevent leak.
 
-	player->path = path;
-
 	{
-		OSStatus err = ExtAudioFileWriteAsync(xaf, 0, nullptr); // initialize async.
+		OSStatus err = ExtAudioFileWriteAsync(player->soundFile->mXAF, 0, nullptr); // initialize async.
 		if (err) printf("init ExtAudioFileWriteAsync err %d\n", (int)err);
     }
 	

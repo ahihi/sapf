@@ -57,8 +57,16 @@ jobs:
       if: runner.os == 'macOS'
       run: .github/scripts/install-macos-deps.sh
 
-    - name: Setup
+    - name: Setup Linux
+      if: runner.os == 'Linux'
       run: meson setup --buildtype release build
+
+    - name: Setup macOS
+      if: runner.os == 'macOS'
+      run: meson setup --buildtype release -Daccelerate=true 
+        -Daudiotoolbox=true -Dapple_lock=true -Dcarbon=true 
+        -Dcocoa=true -Dcorefoundation=true -Dcoremidi=true 
+        -Dmach_time=true -Ddispatch=true -Dmanta=false build
 
     - name: Test
       run: meson test --verbose -C build

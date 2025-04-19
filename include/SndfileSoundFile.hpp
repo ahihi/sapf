@@ -18,8 +18,9 @@ public:
 	SNDFILE *mSndfile;
 	std::vector<double> mBufInterleaved;
 	int mNumChannels;
+	std::string path;
 
-	static std::unique_ptr<SndfileSoundFile> open(const char *path);
+	static std::unique_ptr<SndfileSoundFile> open(const char *path, double threadSampleRate);
 	static std::unique_ptr<SndfileSoundFile> create(const char *path, int numChannels, double threadSampleRate, double fileSampleRate, bool interleaved);
 };
 #endif // SAPF_AUDIOTOOLBOX

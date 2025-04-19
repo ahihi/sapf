@@ -637,8 +637,8 @@ aa 5c 4 apverb6 .5 fade2 .7 * tanh ] ! play
 \[ 256 [.5 .5 1 1 1 2] pick * [1/1 5/4 3/2 15/8 9/4 45/16 27/8] pick * brand 2X + 0 .05 .95 rand [`vsaw `pulse] pick ! #[0 1 0] -2 #[[2m 8m 32m] pick [.25 .5 1] pick] 1 curves = env env 2h 6k xrand * 1h + lpf2 env *] .1 1 2 ola aa .3 0 2 combn + .2 * play
 
 ;;;; MIDI control. see help for starting MIDI and connecting a device.
-(1 1 2h 2k xmctl) 0 (1 2 2h 12k xmctl) sawf .2 * play
-(1 1 50 2k xmctl) [1 1.501] * 0 saw +/ (1 2 2h 20k xmctl) (1 3 1 .01 xmctl) rlpf (1 4 .01 4 mctl)  * softclip (1 5 .0001 .5 xmctl) * play
+(1 1 74 2h 2k xmctl) 0 (1 2 74 2h 12k xmctl) vsaw .2 * play
+(1 1 74 50 2k xmctl) [1 1.501] * 0 saw +/ (1 2 74 2h 20k xmctl) (1 3 74 1 .01 xmctl) rlpf (1 4 74 .01 4 mctl)  * softclip (1 5 74 .0001 .5 xmctl) * play
 
 ;;;; shepard tone
 \[ 80 = t \[ t 16 16384 xline 0 sinosc ^7 t hanenv * .1 * 2X] 8 1 2 ola 4c 2 apverb6 t T> 1 fadein] ! play

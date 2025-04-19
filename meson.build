@@ -40,6 +40,13 @@ sources = [
 deps = []
 cpp_args = ['-std=c++17']
 link_args = []
+cpp_compiler = meson.get_compiler('cpp')
+
+# support clang compilation
+if cpp_compiler.get_id() == 'clang'
+  cpp_args += ['-D_USE_MATH_DEFINES']
+  link_args += ['-lpthread']
+endif
 
 # libedit
 if host_machine.system() == 'windows'
@@ -48,7 +55,7 @@ if host_machine.system() == 'windows'
     cpp_args += ['-DUSE_LIBEDIT=0', '-D_POSIX_THREAD_SAFE_FUNCTIONS']
 else
   deps += dependency('libedit', required: true)
-    cpp_args += ['-DUSE_LIBEDIT=1']
+  cpp_args += ['-DUSE_LIBEDIT=1']
 endif
 
 if get_option('asan')
@@ -57,59 +64,64 @@ if get_option('asan')
 endif
 
 if get_option('accelerate')
-  add_project_arguments('-DSAPF_ACCELERATE', language: 'cpp')
+  add_project_arguments('-DSAPF_ACCELERATE', language: ['cpp', 'objcpp'])
+  link_args += ['-framework', 'Accelerate']
 else
   deps += dependency('fftw3', required: true, version: '>=3')
   deps += dependency('eigen3', required: true)
 endif
 
 if get_option('apple_lock')
-  add_project_arguments('-DSAPF_APPLE_LOCK', language: 'cpp')
+  add_project_arguments('-DSAPF_APPLE_LOCK', language: ['cpp', 'objcpp'])
 endif
 
 if get_option('audiotoolbox')
-  add_project_arguments('-DSAPF_AUDIOTOOLBOX', language: 'cpp')
+  add_project_arguments('-DSAPF_AUDIOTOOLBOX', language: ['cpp', 'objcpp'])
+  link_args += ['-framework', 'AudioToolbox']
 else
   deps += dependency('rtaudio', required: true, version: '>=5.2')
   if not cpp.has_header('RtAudio.h') and cpp.has_header('rtaudio/RtAudio.h')
-    add_project_arguments('-DSAPF_RTAUDIO_H=<rtaudio/RtAudio.h>', language: 'cpp')
+    add_project_arguments('-DSAPF_RTAUDIO_H=<rtaudio/RtAudio.h>', language: ['cpp', 'objcpp'])
   endif
 
   deps += dependency('sndfile', required: true)
 endif
 
 if get_option('carbon')
-  add_project_arguments('-DSAPF_CARBON', language: 'cpp')
+  add_project_arguments('-DSAPF_CARBON', language: ['cpp', 'objcpp'])
+  link_args += ['-framework', 'Carbon']
 endif
 
 if get_option('cocoa')
-  add_project_arguments('-DSAPF_COCOA', language: 'cpp')
-  sources += 'src/makeImage.mm'
+  add_project_arguments('-DSAPF_COCOA', '-std=c++17', language: ['cpp', 'objcpp'])
+  sources += ['src/makeImage.mm']
   add_languages('objcpp', required : true)
+  link_args += ['-framework', 'Cocoa']
 else
   sources += 'src/makeImage.cpp'
 endif
 
 if get_option('corefoundation')
-  add_project_arguments('-DSAPF_COREFOUNDATION', language: 'cpp')
+  add_project_arguments('-DSAPF_COREFOUNDATION', language: ['cpp', 'objcpp'])
+  link_args += ['-framework', 'CoreFoundation']
 endif
 
 if get_option('coremidi')
-  add_project_arguments('-DSAPF_COREMIDI', language: 'cpp')
+  add_project_arguments('-DSAPF_COREMIDI', language: ['cpp', 'objcpp'])
+  link_args += ['-framework', 'CoreMIDI']
 endif
 
 if get_option('dispatch')
   cpp_args += ['-fblocks']
-  link_args += ['-lBlocksRuntime', '-ldispatch']
-  add_project_arguments('-DSAPF_DISPATCH', language: 'cpp')
+  add_project_arguments('-DSAPF_DISPATCH', language: ['cpp', 'objcpp'])
 endif
 
 if get_option('mach_time')
-  add_project_arguments('-DSAPF_MACH_TIME', language: 'cpp')
+  add_project_arguments('-DSAPF_MACH_TIME', language: ['cpp', 'objcpp'])
 endif
 
 if get_option('manta')
-  add_project_arguments('-DSAPF_MANTA', language: 'cpp')
+  add_project_arguments('-DSAPF_MANTA', language: ['cpp', 'objcpp'])
 endif
 
 # main should only be in release build because otherwise it conflicts with the main
