@@ -27,6 +27,7 @@ jobs:
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-rtaudio
             mingw-w64-ucrt-x86_64-readline
+            mingw-w64-ucrt-x86_64-xsimd
             mingw-w64-ucrt-x86_64-ca-certificates
       - name: CI-Build
         run: |

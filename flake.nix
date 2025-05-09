@@ -41,6 +41,7 @@
               ninja
               pkg-config
               rtaudio_6
+              xsimd
             ];
 
             # CC = "${stdenv}/bin/clang";

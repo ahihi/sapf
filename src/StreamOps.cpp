@@ -23,6 +23,8 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
+#include <ZArr.hpp>
+
 #include "MultichannelExpansion.hpp"
 #include "UGen.hpp"
 #include "dsp.hpp"
@@ -5788,8 +5790,12 @@ static void kaiser_(Thread& th, Prim* prim)
 	th.push(out);
 }
 
-
+#include <iostream>
+#ifdef TEST_BUILD
+void hanning_(Thread& th, Prim* prim)
+#else
 static void hanning_(Thread& th, Prim* prim)
+#endif
 {
 	int64_t n = th.popInt("hanning : n");
 	
@@ -5799,13 +5805,19 @@ static void hanning_(Thread& th, Prim* prim)
 #ifdef SAPF_ACCELERATE
 	vDSP_hann_windowD(out->mArray->z(), n, 0);
 #else
-        // TODO
+	Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n - 1);
+	ZArr outzarr = zarr(out->mArray->z(), n, 1);
+	outzarr = 0.5 * (1.0 - (2.0 * M_PI * arr / n).cos());
 #endif // SAPF_ACCELERATE
 	
 	th.push(out);
 }
 
+#ifdef TEST_BUILD
+void hamming_(Thread& th, Prim* prim)
+#else
 static void hamming_(Thread& th, Prim* prim)
+#endif
 {
 	int64_t n = th.popInt("hanning : n");
 	
@@ -5815,13 +5827,19 @@ static void hamming_(Thread& th, Prim* prim)
 #ifdef SAPF_ACCELERATE
 	vDSP_hamm_windowD(out->mArray->z(), n, 0);
 #else
-        // TODO
+	Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n - 1);
+	ZArr outzarr = zarr(out->mArray->z(), n, 1);
+	outzarr = 0.54 - .46 * (2.0 * M_PI * arr / n).cos();
 #endif // SAPF_ACCELERATE
 	
 	th.push(out);
 }
 
+#ifdef TEST_BUILD
+void blackman_(Thread& th, Prim* prim)
+#else
 static void blackman_(Thread& th, Prim* prim)
+#endif
 {
 	int64_t n = th.popInt("hanning : n");
 	
@@ -5831,7 +5849,11 @@ static void blackman_(Thread& th, Prim* prim)
 #ifdef SAPF_ACCELERATE
 	vDSP_blkman_windowD(out->mArray->z(), n, 0);
 #else
-        // TODO
+	Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n - 1);
+	ZArr outzarr = zarr(out->mArray->z(), n, 1);
+	outzarr = 0.42
+		- .5 * (2.0 * M_PI * arr / n).cos()
+		+ .08 * (4.0 * M_PI * arr / n).cos();
 #endif // SAPF_ACCELERATE
 	
 	th.push(out);
@@ -5908,12 +5930,34 @@ static void seg_(Thread& th, Prim* prim)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// separated out for better testability of simd implementation
+#ifdef SAPF_ACCELERATE
+	#ifdef TEST_BUILD
+	    void wseg_apply_window(Z* segbuf, Z* window, int n) {
+	#else
+	    inline void wseg_apply_window(Z* segbuf, Z* window, int n) {
+	#endif
+        vDSP_vmulD(segbuf, 1, window, 1, segbuf, 1, n);
+    }
+#else
+	#ifdef TEST_BUILD
+	    void wseg_apply_window(Z* segbuf, ZArr window, int n) {
+	#else
+	    inline void wseg_apply_window(Z* segbuf, ZArr window, int n) {
+	#endif
+        ZArr segbufarr = zarr(segbuf, 1, n);
+		segbufarr = segbufarr * window;
+    }
+#endif
 
 struct WinSegment : public Gen
 {
 	ZIn in_;
 	BothIn hop_;
 	P<Array> window_;
+#ifndef SAPF_ACCELERATE
+	ZArr windowzarr_;
+#endif
     int length_;
 	int offset;
     Z fracsamp_;
@@ -5921,6 +5965,9 @@ struct WinSegment : public Gen
 	
 	WinSegment(Thread& th, Arg in, Arg hop, P<Array> const& window)
         : Gen(th, itemTypeV, mostFinite(in, hop)), in_(in), hop_(hop), window_(window),
+#ifndef SAPF_ACCELERATE
+			windowzarr_(zarr(window_->z(), 1, (int)window_->size())),
+#endif
             length_((int)window_->size()),
         fracsamp_(0.), sr_(th.rate.sampleRate)
 	{
@@ -5941,9 +5988,9 @@ struct WinSegment : public Gen
             Z* segbuf = segment->mArray->z();
 			bool nomore = in_.fillSegment(th, (int)length_, segbuf);
 #ifdef SAPF_ACCELERATE
-            vDSP_vmulD(segbuf, 1, window_->z(), 1, segbuf, 1, length_);
+            wseg_apply_window(segbuf, window_->z(), length_);
 #else
-            // TODO
+            wseg_apply_window(segbuf, windowzarr_, length_);
 #endif // SAPF_ACCELERATE
 			out[i] = segment;
 			++framesFilled;

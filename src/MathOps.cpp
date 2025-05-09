@@ -22,6 +22,7 @@
 #include <Accelerate/Accelerate.h>
 #else
 #include <Eigen/Dense>
+#include "ZArr.hpp"
 #endif
 
 V BinaryOp::makeVList(Thread& th, Arg a, Arg b)
@@ -420,15 +421,6 @@ static void DoIReduce(Thread& th, BinaryOp* op)
 	UnaryOp* gUnaryOpPtr_##NAME = &gUnaryOp_##NAME; \
 	UNARY_OP_PRIM(NAME)
 #else
-#if SAMPLE_IS_DOUBLE
-	typedef Eigen::Map<Eigen::ArrayXd, 0, Eigen::InnerStride<>> ZArr;
-#else
-	typedef Eigen::Map<Eigen::ArrayXf, 0, Eigen::InnerStride<>> ZArr;
-#endif
-
-ZArr zarr(const Z *vec, int n, int stride) {
-	return ZArr((Z *)vec, n, Eigen::InnerStride<>(stride));
-}
 
 #define ZARR_BINOP(op, n, aa, astride, bb, bstride, out) \
 	do { \
@@ -460,6 +452,35 @@ ZArr zarr(const Z *vec, int n, int stride) {
 	UnaryOp_##NAME gUnaryOp_##NAME; \
 	UnaryOp* gUnaryOpPtr_##NAME = &gUnaryOp_##NAME; \
 	UNARY_OP_PRIM(NAME)
+
+// OP should be some code which takes ZBatch A and produces ZBatch R
+// TODO: By switching the relevant vars to use an aligned allocator provided by xsimd,
+//		we could use load/store_aligned and improve performance
+#define DEFINE_UNOP_FLOATVV_XSIMD(NAME, CODE, OP) \
+	struct UnaryOp_##NAME : public UnaryOp { \
+		virtual const char *Name() { return #NAME; } \
+		virtual double op(double a) { return CODE; } \
+		virtual void loopz(int n, const Z *aa, int astride, Z *out) { \
+			if (astride == 1) { \
+				size_t vec_size = n - n % zbatch_size; \
+				for (size_t i = 0; i < vec_size; i += zbatch_size) { \
+					ZBatch A = ZBatch::load_unaligned(&aa[i]); \
+					OP \
+					R.store_unaligned(&out[i]); \
+				} \
+				for(size_t i = vec_size; i < n; ++i) { \
+					Z a = aa[i]; \
+					out[i] = CODE; \
+				} \
+			} else { \
+				LOOP(i,n) { Z a = *aa; out[i] = CODE; aa += astride; } \
+			} \
+		} \
+	}; \
+	UnaryOp_##NAME gUnaryOp_##NAME; \
+	UnaryOp* gUnaryOpPtr_##NAME = &gUnaryOp_##NAME; \
+	UNARY_OP_PRIM(NAME)
+
 #endif // SAPF_ACCELERATE
 
 
@@ -637,6 +658,53 @@ ZArr zarr(const Z *vec, int n, int stride) {
 	BinaryOp_##NAME gBinaryOp_##NAME; \
 	BinaryOp* gBinaryOpPtr_##NAME = &gBinaryOp_##NAME; \
 	BINARY_OP_PRIM(NAME)
+
+// op should take a ZBatch A and ZBatch B and
+// populate a ZBatch R with the result.
+// TODO: By switching the relevant vars to use an aligned allocator provided by xsimd,
+//		we could use load/store_aligned and improve performance
+#define DEFINE_BINOP_FLOATVV_XSIMD(NAME, CODE, OP) \
+	struct BinaryOp_##NAME : public BinaryOp { \
+		virtual const char *Name() { return #NAME; } \
+		virtual double op(double a, double b) { return CODE; } \
+		virtual void loopz(int n, const Z *aa, int astride, const Z *bb, int bstride, Z *out) { \
+			if (astride == 1 && bstride == 1) { \
+				size_t vec_size = n - n % zbatch_size; \
+				for (size_t i = 0; i < vec_size; i += zbatch_size) { \
+					ZBatch A = ZBatch::load_unaligned(&aa[i]); \
+					ZBatch B = ZBatch::load_unaligned(&bb[i]); \
+					OP \
+					R.store_unaligned(&out[i]); \
+				} \
+				for(size_t i = vec_size; i < n; ++i) { \
+					Z a = aa[i]; \
+					Z b = bb[i]; \
+					out[i] = CODE; \
+				} \
+			} else { \
+				LOOP(i,n) { Z a = *aa; Z b = *bb; out[i] = CODE; aa += astride; bb += bstride; } \
+			} \
+		} \
+		virtual void pairsz(int n, Z& z, Z *aa, int astride, Z *out) { \
+			Z b = z; \
+			LOOP(i,n) { Z a = *aa; out[i] = CODE; b = a; aa += astride; } \
+			z = b; \
+		} \
+		virtual void scanz(int n, Z& z, Z *aa, int astride, Z *out) { \
+			Z a = z; \
+			LOOP(i,n) { Z b = *aa; out[i] = a = CODE; aa += astride; } \
+			z = a; \
+		} \
+		virtual void reducez(int n, Z& z, Z *aa, int astride) { \
+			Z a = z; \
+			LOOP(i,n) { Z b = *aa; a = CODE; aa += astride; } \
+			z = a; \
+		} \
+	}; \
+	BinaryOp_##NAME gBinaryOp_##NAME; \
+	BinaryOp* gBinaryOpPtr_##NAME = &gBinaryOp_##NAME; \
+	BINARY_OP_PRIM(NAME)
+
 	
 #endif // SAPF_ACCELERATE
 
@@ -800,11 +868,21 @@ DEFINE_UNOP_FLOATVV(log10, sc_log10(a), vvlog10(out, aa, &n), A.log10())
 DEFINE_UNOP_FLOATVV(log1p, log1p(a), vvlog1p(out, aa, &n), A.log1p())
 DEFINE_UNOP_FLOAT(exp10, pow(10., a))
 
-// TODO: Not vectorized in Eigen - possibly use XSIMD?
 #ifdef SAPF_ACCELERATE
 	DEFINE_UNOP_FLOATVV(logb, logb(a), vvlogb(out, aa, &n), "todo")
 #else
-	DEFINE_UNOP_FLOAT(logb, logb(a))
+	// Extract IEEE 754 exponent bits, then unbias by subtracting
+	#if SAMPLE_IS_DOUBLE
+		DEFINE_UNOP_FLOATVV_XSIMD(logb, logb(a),
+			auto bits = xsimd::bitwise_cast<Z_INT_EQUIV>(A);
+			auto R = xsimd::to_float((bits >> 52) & 0x7FF) - 1023.0;
+		)
+	#else
+		DEFINE_UNOP_FLOATVV_XSIMD(logb, logb(a),
+			auto bits = xsimd::bitwise_cast<Z_INT_EQUIV>(A);
+			auto R = xsimd::to_float((bits >> 23) & 0xFF) - 127.0f;
+		)
+	#endif
 #endif
 
 DEFINE_UNOP_FLOAT(sinc, sc_sinc(a))
@@ -909,8 +987,40 @@ DEFINE_BINOP_FLOATVV(copysign, 1, copysign(a, b), vvcopysign(out, const_cast<Z*>
 #ifdef SAPF_ACCELERATE
 	DEFINE_BINOP_FLOATVV(nextafter, 1, nextafter(a, b), vvnextafter(out, const_cast<Z*>(aa), bb, &n), "todo") // bug in vForce.h requires const_cast
 #else
-	// TODO: Not vectorized in Eigen - possibly use XSIMD?
-	DEFINE_BINOP_FLOAT(nextafter, nextafter(a, b))
+    using int_batch  = xsimd::batch<Z_INT_EQUIV>;
+    using bool_batch = xsimd::batch_bool<Z_INT_EQUIV>;
+
+    const xsimd::batch<Z_INT_EQUIV> sign_mask = xsimd::bitwise_cast<Z_INT_EQUIV>(xsimd::batch<Z>{-0.0});
+    const xsimd::batch<Z_INT_EQUIV> zero_mask{0};
+    const xsimd::batch<Z_INT_EQUIV> one_mask{1};
+    const xsimd::batch<Z_INT_EQUIV> neg_one_mask{-1};
+
+    DEFINE_BINOP_FLOATVV_XSIMD(nextafter, nextafter(a, b),
+        // Handle case where from == to
+        auto equal_mask = (A == B);
+
+        // Bitwise view
+        auto from_bits = xsimd::bitwise_cast<Z_INT_EQUIV>(A);
+        auto to_bits   = xsimd::bitwise_cast<Z_INT_EQUIV>(B);
+
+        // Handle -0.0 correctly: treat it as 0
+        auto is_neg_zero = (from_bits == sign_mask);
+        auto cleaned_from_bits = xsimd::select(is_neg_zero, zero_mask, from_bits);
+
+        // Compare bitwise: from_bits < to_bits
+        bool_batch direction_mask = (cleaned_from_bits < to_bits);
+
+        // Select +1 or -1 based on direction
+        auto increment = xsimd::select(direction_mask, one_mask, neg_one_mask);
+
+        auto adjusted_bits = cleaned_from_bits + increment;
+
+        // Reinterpret as Z
+        auto result = xsimd::bitwise_cast<Z>(adjusted_bits);
+
+        // Use original comparison to handle from == to
+        auto R = xsimd::select(equal_mask, B, result);
+    )
 #endif
 
 // identity optimizations of basic operators.
@@ -1272,8 +1382,9 @@ DEFINE_BINOP_FLOATVV(pow, 1, sc_pow(a, b), vvpow(out, bb, aa, &n), pow(A, B))
 #ifdef SAPF_ACCELERATE
 	DEFINE_BINOP_FLOATVV(atan2, 1, atan2(a, b), vvatan2(out, aa, bb, &n), "todo")
 #else
-	// TODO: Not supported in Eigen until next release (whatever is after 3.4.0). Could use XSIMD if desired.
-	DEFINE_BINOP_FLOAT(atan2, atan2(a, b))
+	DEFINE_BINOP_FLOATVV_XSIMD(atan2, atan2(a, b),
+		auto R = xsimd::atan2(A, B);
+	)
 #endif
 
 

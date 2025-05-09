@@ -1,7 +1,23 @@
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+//    SAPF - Sound As Pure Form
+//    Copyright (C) 2019 James McCartney
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "Object.hpp"
 #include "doctest.h"
 #include <array>
+#include <ZArr.hpp>
 
 using std::array;
 
@@ -10,11 +26,15 @@ using std::array;
 		LOOP(i,n) { CHECK(out[i] == doctest::Approx(expected[i]).epsilon(1e-9)); } \
 	} while (0)
 
-void check_unop_loopz(UnaryOp& op, const array<Z, 3> in) {
-	double out[3];
-	double expected[3] = {op.op(in[0]), op.op(in[1]), op.op(in[2])};
-	op.loopz(3, in.data(), 1, out);
-	CHECK_ARR(expected, out, 3);
+// ensure it's long enough to exceed the max possible vector batch size (16 with an AVX512 int32)
+const int test_n = 18;
+void check_unop_loopz(UnaryOp& op, const array<Z, 3> inarr) {
+	double out[test_n];
+	double expected[test_n];
+	double in[test_n];
+	LOOP(i,test_n) { in[i] = inarr[i % 3]; expected[i] = op.op(in[i]); }
+	op.loopz(test_n, in, 1, out);
+	CHECK_ARR(expected, out, test_n);
 }
 
 void check_unop_loopz(UnaryOp& op) {
@@ -39,6 +59,7 @@ extern UnaryOp* gUnaryOpPtr_log;
 extern UnaryOp* gUnaryOpPtr_log2;
 extern UnaryOp* gUnaryOpPtr_log10;
 extern UnaryOp* gUnaryOpPtr_log1p;
+extern UnaryOp* gUnaryOpPtr_logb;
 extern UnaryOp* gUnaryOpPtr_sin;
 extern UnaryOp* gUnaryOpPtr_cos;
 extern UnaryOp* gUnaryOpPtr_sin1;
@@ -129,6 +150,116 @@ TEST_CASE("unary ops") {
 	CHECK_UNOP_NORMALIZED(asin);
 	CHECK_UNOP_NORMALIZED(acos);
 	CHECK_UNOP_NORMALIZED(atanh);
+
+	SUBCASE("logb") {
+		check_unop_loopz(*gUnaryOpPtr_logb, {1029, 2046, 1023});
+	}
+
+	SUBCASE("nextafter") {
+		check_unop_loopz(*gUnaryOpPtr_logb, {1029, 2046, 1023});
+	}
+}
+
+extern BinaryOp* gBinaryOpPtr_plus;
+extern BinaryOp* gBinaryOpPtr_minus;
+extern BinaryOp* gBinaryOpPtr_mul;
+extern BinaryOp* gBinaryOpPtr_div;
+extern BinaryOp* gBinaryOpPtr_copysign;
+extern BinaryOp* gBinaryOpPtr_nextafter;
+extern BinaryOp* gBinaryOpPtr_pow;
+extern BinaryOp* gBinaryOpPtr_atan2;
+extern BinaryOp* gBinaryOpPtr_min;
+extern BinaryOp* gBinaryOpPtr_max;
+extern BinaryOp* gBinaryOpPtr_hypot;
+
+void check_binop_loopz(BinaryOp& op, const array<Z, 3> aarr, int astride, const array<Z, 3> barr, int bstride) {
+	double out[test_n];
+	double expected[test_n];
+	double a[test_n];
+	double b[test_n];
+	LOOP(i,test_n) { a[i] = aarr[i % 3]; b[i] = barr[i % 3]; expected[i] = op.op(a[i], b[i]); }
+	op.loopz(3, a, 1, b, 1, out);
+	CHECK_ARR(expected, out, 3);
+}
+
+void check_binop_loopz(BinaryOp& op, int astride, int bstride) {
+	check_binop_loopz(op, {1, 2, 3}, astride, {4, 5, 6}, bstride);
+}
+
+#define CHECK_IDENTITY_BINOP(op) \
+	do { \
+		SUBCASE(#op) { \
+			SUBCASE("stride 1") { check_binop_loopz(*gBinaryOpPtr_##op, 1, 1); } \
+			SUBCASE("stride 0") { check_binop_loopz(*gBinaryOpPtr_##op, 0, 0); } \
+			SUBCASE("astride 1") { check_binop_loopz(*gBinaryOpPtr_##op, 1, 0); } \
+			SUBCASE("bstride 1") { check_binop_loopz(*gBinaryOpPtr_##op, 0, 1); } \
+			SUBCASE("a 0") { check_binop_loopz(*gBinaryOpPtr_##op, {0}, 0, {4, 5, 6}, 1); } \
+			SUBCASE("b 0") { check_binop_loopz(*gBinaryOpPtr_##op, {1, 2, 3}, 1, {4, 5, 6}, 0); } \
+		} \
+	} while (0)
+
+TEST_CASE("identity optimized binops") {
+	CHECK_IDENTITY_BINOP(plus);
+	CHECK_IDENTITY_BINOP(minus);
+	CHECK_IDENTITY_BINOP(div);
+	CHECK_IDENTITY_BINOP(mul);
+}
+
+#define CHECK_BINOP(op) \
+	do { \
+		SUBCASE(#op) { \
+			check_binop_loopz(*gBinaryOpPtr_##op, 1, 1); \
+		} \
+	} while (0)
+
+TEST_CASE("other binops") {
+	CHECK_BINOP(copysign);
+	CHECK_BINOP(pow);
+	CHECK_BINOP(min);
+	CHECK_BINOP(max);
+	CHECK_BINOP(hypot);
+}
+
+TEST_CASE("binop copysign negative handling") {
+	check_binop_loopz(*gBinaryOpPtr_copysign, {-1, -2, -3}, 1, {4, 5, 6}, 1);
+	check_binop_loopz(*gBinaryOpPtr_copysign, {1, 2, 3}, 1, {-4, -5, -6}, 1);
+	check_binop_loopz(*gBinaryOpPtr_copysign, {-1, -2, -3}, 1, {-4, -5, -6}, 1);
+}
+
+TEST_CASE("nextafter") {
+	SUBCASE("different") {
+		check_binop_loopz(*gBinaryOpPtr_nextafter, {1, 2, 3}, 1, {4, 5, 6}, 1);
+	}
+	SUBCASE("swap") {
+		check_binop_loopz(*gBinaryOpPtr_nextafter, {4, 5, 6}, 1, {7, 8, 9}, 1);
+	}
+	SUBCASE("eq") {
+		check_binop_loopz(*gBinaryOpPtr_nextafter, {1, 2, 3}, 1, {1, 2, 3}, 1);
+	}
+	SUBCASE("neg / poz") {
+		check_binop_loopz(*gBinaryOpPtr_nextafter, {-1, -2, -3}, 1, {4, 5, 6}, 1);
+	}
+	SUBCASE("poz / neg") {
+		check_binop_loopz(*gBinaryOpPtr_nextafter, {1, 2, 3}, 1, {-4, -5, -6}, 1);
+	}
+}
+
+TEST_CASE("atan2") {
+	SUBCASE("normal") {
+		check_binop_loopz(*gBinaryOpPtr_atan2, {1, 2, 3}, 1, {4, 5, 6}, 0);
+	}
+	SUBCASE("swap") {
+		check_binop_loopz(*gBinaryOpPtr_atan2, {4, 5, 6}, 1, {1, 2, 3}, 0);
+	}
+	SUBCASE("eq") {
+		check_binop_loopz(*gBinaryOpPtr_atan2, {1, 2, 3}, 1, {1, 2, 3}, 0);
+	}
+	SUBCASE("neg / poz") {
+		check_binop_loopz(*gBinaryOpPtr_atan2, {-1, -2, -3}, 1, {4, 5, 6}, 0);
+	}
+	SUBCASE("poz / neg") {
+		check_binop_loopz(*gBinaryOpPtr_atan2, {1, 2, 3}, 1, {-4, -5, -6}, 0);
+	}
 }
 
 extern BinaryOp* gBinaryOpPtr_plus;
@@ -140,17 +271,6 @@ extern BinaryOp* gBinaryOpPtr_pow;
 extern BinaryOp* gBinaryOpPtr_min;
 extern BinaryOp* gBinaryOpPtr_max;
 extern BinaryOp* gBinaryOpPtr_hypot;
-
-void check_binop_loopz(BinaryOp& op, const array<Z, 3> a, int astride, const array<Z, 3> b, int bstride) {
-	double out[3];
-	double expected[3] = {op.op(a[0], b[0]), op.op(a[1], b[1]), op.op(a[2], b[2])};
-	op.loopz(3, a.data(), 1, b.data(), 1, out);
-	CHECK_ARR(expected, out, 3);
-}
-
-void check_binop_loopz(BinaryOp& op, int astride, int bstride) {
-	check_binop_loopz(op, {1, 2, 3}, astride, {4, 5, 6}, bstride);
-}
 
 #define CHECK_IDENTITY_BINOP(op) \
 	do { \
