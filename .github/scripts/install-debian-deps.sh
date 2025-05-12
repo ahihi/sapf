@@ -7,4 +7,5 @@ sudo apt install -y \
   libedit-dev \
   libfftw3-dev \
   libsndfile1-dev \
+  libxsimd-dev \
   librtaudio-dev
