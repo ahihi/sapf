@@ -424,15 +424,15 @@ static void DoIReduce(Thread& th, BinaryOp* op)
 
 #define ZARR_BINOP(op, n, aa, astride, bb, bstride, out) \
 	do { \
-		const ZArr A = zarr(aa, n, astride); \
-		const ZArr B = zarr(bb, n, bstride); \
+		const CZArr A = czarr(aa, n, astride); \
+		const CZArr B = czarr(bb, n, bstride); \
 		ZArr R = zarr(out, n, 1); \
 		R = op; \
 	} while (0)
 
 #define ZARR_UNOP(op, n, aa, astride, out) \
 	do { \
-		const ZArr A = zarr(aa, n, astride); \
+		const CZArr A = czarr(aa, n, astride); \
 		ZArr R = zarr(out, n, 1); \
 		R = op; \
 	} while (0)

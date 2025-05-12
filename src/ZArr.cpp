@@ -17,12 +17,11 @@
 #include "ZArr.hpp"
 #ifndef SAPF_ACCELERATE
 
-ZArr zarr(const Z *vec, int n, int stride) {
-	#if SAMPLE_IS_DOUBLE
-		return ZArr((double *)vec, n, Eigen::InnerStride<>(stride));
-	#else
-		return ZArr((float *)vec, n, Eigen::InnerStride<>(stride));
-	#endif
+ZArr zarr(Z *vec, const int n, const int stride) {
+		return ZArr(vec, n, Eigen::InnerStride<>(stride));
 }
 
+CZArr czarr(const Z *vec, const int n, const int stride) {
+  return CZArr(vec, n, Eigen::InnerStride<>(stride));
+}
 #endif

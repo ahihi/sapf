@@ -24,18 +24,23 @@
 
 #if SAMPLE_IS_DOUBLE
 	typedef Eigen::Map<Eigen::ArrayXd, 0, Eigen::InnerStride<>> ZArr;
+	typedef Eigen::Map<const Eigen::ArrayXd, 0, Eigen::InnerStride<>> CZArr;
 	typedef xsimd::batch<double> ZBatch;
 	typedef int64_t Z_INT_EQUIV;
 #else
 	typedef Eigen::Map<Eigen::ArrayXf, 0, Eigen::InnerStride<>> ZArr;
+	typedef Eigen::Map<const Eigen::ArrayXf, 0, Eigen::InnerStride<>> CZArr;
 	typedef xsimd::batch<float> ZBatch;
 	typedef int32_t Z_INT_EQUIV;
 #endif
 
 constexpr size_t zbatch_size = ZBatch::size;
 
-// create an Eigen Map over an existing array, without copying
-ZArr zarr(const Z *vec, int n, int stride);
+// create mutable Eigen Map over an existing array, without copying
+ZArr zarr(Z *vec, int n, int stride);
+
+// create immutable Eigen Map over an existing array, without copying
+CZArr czarr(const Z *vec, int n, int stride);
 
 #endif
 #endif
