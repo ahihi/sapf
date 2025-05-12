@@ -17,7 +17,7 @@
 #include "Object.hpp"
 #include "doctest.h"
 #include <array>
-#include <ZArr.hpp>
+#include "ZArr.hpp"
 
 using std::array;
 

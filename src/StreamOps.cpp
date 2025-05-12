@@ -23,8 +23,8 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
-#include <ZArr.hpp>
 
+#include "ZArr.hpp"
 #include "MultichannelExpansion.hpp"
 #include "UGen.hpp"
 #include "dsp.hpp"
