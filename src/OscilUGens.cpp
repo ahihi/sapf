@@ -26,7 +26,6 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
-#include "Testability.hpp"
 #ifdef SAPF_ACCELERATE
 #include <Accelerate/Accelerate.h>
 #else
@@ -92,35 +91,31 @@ static void normalize(int n, Z* buf)
 	}
 }
 
-#ifdef TEST_BUILD
-void fillWaveTable(int n, Z* amps, int ampStride, Z* phases, int phaseStride, Z smooth, Z* table)
-#else
-static void fillWaveTable(int n, Z* amps, int ampStride, Z* phases, int phaseStride, Z smooth, Z* table)
-#endif
-{
-	const size_t kWaveTableSize2 = kWaveTableSize / 2;
-	const Z two_pi = 2. * M_PI;
-	
-	Z real[kWaveTableSize2];
-	Z imag[kWaveTableSize2];
-	Z polar[kWaveTableSize];
-	Z rect[kWaveTableSize];
-	
-	zeroTable(kWaveTableSize2, real);
-	zeroTable(kWaveTableSize2, imag);
+void fillWaveTable(const int n, const Z *amps, const int ampStride, const Z *phases, const int phaseStride, const Z smooth, Z *table) {
+  
+  const size_t kWaveTableSize2 = kWaveTableSize / 2;
+  const Z two_pi = 2. * M_PI;
+
+  Z real[kWaveTableSize2];
+  Z imag[kWaveTableSize2];
+  Z polar[kWaveTableSize];
+  Z rect[kWaveTableSize];
+
+  zeroTable(kWaveTableSize2, real);
+  zeroTable(kWaveTableSize2, imag);
 
 
-	Z w = M_PI_2 / n;
-	for (int i = 0; i < n; ++i) {
-		Z smoothAmp = smooth == 0. ? 1. : pow(cos(w*i), smooth);
-		//fillHarmonic(i+1, *amps * smoothAmp, *phases, table);
-		real[i+1] = *amps * smoothAmp;
-		imag[i+1] = (*phases - .25) * two_pi;
-		amps += ampStride;
-		phases += phaseStride;
-	}
+  Z w = M_PI_2 / n;
+  for (int i = 0; i < n; ++i) {
+    Z smoothAmp = smooth == 0. ? 1. : pow(cos(w * i), smooth);
+    //fillHarmonic(i+1, *amps * smoothAmp, *phases, table);
+    real[i + 1] = *amps * smoothAmp;
+    imag[i + 1] = (*phases - .25) * two_pi;
+    amps += ampStride;
+    phases += phaseStride;
+  }
 
-	// convert polar to rectangular
+  // convert polar to rectangular
 #ifdef SAPF_ACCELERATE
 	DSPDoubleSplitComplex in;
 	in.realp = real;
@@ -130,13 +125,13 @@ static void fillWaveTable(int n, Z* amps, int ampStride, Z* phases, int phaseStr
 	vDSP_rectD(polar, 2, rect, 2, kWaveTableSize2);
 	vDSP_ctozD((DSPDoubleComplex*)rect, 2, &in, 1, kWaveTableSize2);
 #else
-	ZArr real_zarr = zarr(real, kWaveTableSize2, 1);
-	ZArr imag_zarr = zarr(imag, kWaveTableSize2, 1);
-	Eigen::ArrayXd mag = real_zarr;
-	real_zarr = mag * imag_zarr.cos();
-	imag_zarr = mag * imag_zarr.sin();
+  ZArr real_zarr = zarr(real, kWaveTableSize2, 1);
+  ZArr imag_zarr = zarr(imag, kWaveTableSize2, 1);
+  Eigen::ArrayXd mag = real_zarr;
+  real_zarr = mag * imag_zarr.cos();
+  imag_zarr = mag * imag_zarr.sin();
 #endif // SAPF_ACCELERATE
-	rifft(kWaveTableSize, real, imag, table);
+  rifft(kWaveTableSize, real, imag, table);
 }
 
 static void fill3rdOctaveTables(int n, Z* amps, int ampStride, Z* phases, int phaseStride, Z smooth, Z* tables)
@@ -1155,18 +1150,6 @@ static void impulse_(Thread& th, Prim* prim)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef TEST_BUILD
-	struct SinOsc : OneInputUGen<SinOsc>
-	{
-		Z phase;
-		Z freqmul;
-
-		SinOsc(Thread& th, Arg freq, Z iphase);
-		virtual const char* TypeName() const override;
-		void calc(int n, Z* out, Z* freq, int freqStride);
-	};
-#endif
-
 SinOsc::SinOsc(Thread &th, Arg freq, Z iphase) : OneInputUGen<SinOsc>(th, freq),
 		phase(sc_wrap(iphase, 0., 1.) * kTwoPi), freqmul(th.rate.radiansPerSample)
 {
@@ -1304,19 +1287,6 @@ struct SinOscPMFB : public TwoInputUGen<SinOscPMFB>
 		}
 	}
 };
-
-
-#ifndef TEST_BUILD
-struct SinOscPM : TwoInputUGen<SinOscPM>
-{
-	Z phase;
-	Z freqmul;
-
-	SinOscPM(Thread& th, Arg freq, Arg phasemod);
-	virtual const char* TypeName() const override;
-	void calc(int n, Z* out, Z* freq, Z* phasemod, int freqStride, int phasemodStride);
-};
-#endif
 
 SinOscPM::SinOscPM(Thread& th, Arg freq, Arg phasemod) : TwoInputUGen<SinOscPM>(th, freq, phasemod), phase(0.), freqmul(th.rate.radiansPerSample)
 {

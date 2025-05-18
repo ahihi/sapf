@@ -19,7 +19,7 @@
 #include "VM.hpp"
 #include "doctest.h"
 #include "ArrHelpers.hpp"
-#include "Testability.hpp"
+#include "OscilUGens.hpp"
 
 // non-vectorized version for comparison
 void sinosc_calc(Z phase, Z freqmul, int n, Z* out, Z* freq, int freqStride) {

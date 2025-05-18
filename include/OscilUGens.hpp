@@ -18,7 +18,30 @@
 #define __taggeddoubles__OscilUGens__
 
 #include "Object.hpp"
+#include "UGen.hpp"
 
 void AddOscilUGenOps();
+
+struct SinOsc : OneInputUGen<SinOsc>
+{
+  Z phase;
+  Z freqmul;
+
+  SinOsc(Thread& th, Arg freq, Z iphase);
+  const char* TypeName() const override;
+  void calc(int n, Z* out, Z* freq, int freqStride);
+};
+
+struct SinOscPM : TwoInputUGen<SinOscPM>
+{
+  Z phase;
+  Z freqmul;
+
+  SinOscPM(Thread& th, Arg freq, Arg phasemod);
+  const char* TypeName() const override;
+  void calc(int n, Z* out, Z* freq, Z* phasemod, int freqStride, int phasemodStride);
+};
+
+void fillWaveTable(int n, const Z* amps, int ampStride, const Z* phases, int phaseStride, Z smooth, Z* table);
 
 #endif /* defined(__taggeddoubles__OscilUGens__) */

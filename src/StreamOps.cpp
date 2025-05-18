@@ -24,6 +24,7 @@
 #include <vector>
 #include <algorithm>
 
+#include "StreamOps.hpp"
 #include "ZArr.hpp"
 #include "MultichannelExpansion.hpp"
 #include "UGen.hpp"
@@ -5791,33 +5792,24 @@ static void kaiser_(Thread& th, Prim* prim)
 }
 
 #include <iostream>
-#ifdef TEST_BUILD
 void hanning_(Thread& th, Prim* prim)
-#else
-static void hanning_(Thread& th, Prim* prim)
-#endif
 {
-	int64_t n = th.popInt("hanning : n");
+  int64_t n = th.popInt("hanning : n");
 	
-	P<List> out = new List(itemTypeZ, n);
-	out->mArray->setSize(n);
+  P<List> out = new List(itemTypeZ, n);
+  out->mArray->setSize(n);
 
 #ifdef SAPF_ACCELERATE
 	vDSP_hann_windowD(out->mArray->z(), n, 0);
 #else
-	Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n - 1);
-	ZArr outzarr = zarr(out->mArray->z(), n, 1);
-	outzarr = 0.5 * (1.0 - (2.0 * M_PI * arr / n).cos());
+  Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n - 1);
+  ZArr outzarr = zarr(out->mArray->z(), n, 1);
+  outzarr = 0.5 * (1.0 - (2.0 * M_PI * arr / n).cos());
 #endif // SAPF_ACCELERATE
 	
-	th.push(out);
+  th.push(out);
 }
-
-#ifdef TEST_BUILD
 void hamming_(Thread& th, Prim* prim)
-#else
-static void hamming_(Thread& th, Prim* prim)
-#endif
 {
 	int64_t n = th.popInt("hanning : n");
 	
@@ -5835,11 +5827,7 @@ static void hamming_(Thread& th, Prim* prim)
 	th.push(out);
 }
 
-#ifdef TEST_BUILD
 void blackman_(Thread& th, Prim* prim)
-#else
-static void blackman_(Thread& th, Prim* prim)
-#endif
 {
 	int64_t n = th.popInt("hanning : n");
 	
@@ -5930,23 +5918,14 @@ static void seg_(Thread& th, Prim* prim)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// separated out for better testability of simd implementation
 #ifdef SAPF_ACCELERATE
-	#ifdef TEST_BUILD
-	    void wseg_apply_window(Z* segbuf, Z* window, int n) {
-	#else
-	    inline void wseg_apply_window(Z* segbuf, Z* window, int n) {
-	#endif
+	  void wseg_apply_window(Z* segbuf, Z* window, int n) {
         vDSP_vmulD(segbuf, 1, window, 1, segbuf, 1, n);
     }
 #else
-	#ifdef TEST_BUILD
-	    void wseg_apply_window(Z* segbuf, ZArr window, int n) {
-	#else
-	    inline void wseg_apply_window(Z* segbuf, ZArr window, int n) {
-	#endif
+	  void wseg_apply_window(Z* segbuf, ZArr window, int n) {
         ZArr segbufarr = zarr(segbuf, 1, n);
-		segbufarr = segbufarr * window;
+		    segbufarr = segbufarr * window;
     }
 #endif
 
