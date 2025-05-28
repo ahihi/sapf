@@ -111,15 +111,15 @@ void SndfileSoundFile::endOfInputFile() {
 void SndfileSoundFile::pullWithoutResampling(uint32_t *framesRead, PortableBuffers &buffers,
                                              const int requestedOutputFrames) const {
 	buffers.interleaved.resize(requestedOutputFrames * this->mNumChannels * sizeof(double));
-	const auto interleaved = (double *) buffers.interleaved.data();
+	const auto interleaved = reinterpret_cast<double *>(buffers.interleaved.data());
 
 	const auto framesReallyRead = readFramesFromFile(this->mSndfile, interleaved, requestedOutputFrames);
 
-		*framesRead = framesReallyRead;
+  *framesRead = framesReallyRead;
 
 	// De-interleave each channel
 	for (int ch = 0; ch < this->mNumChannels; ++ch) {
-		auto *buf = (double *) buffers.buffers[ch].data;
+		auto *buf = static_cast<double *>(buffers.buffers[ch].data);
 		deInterleaveAudio(interleaved, buf, framesReallyRead, this->mNumChannels, ch);
 	}
 }
@@ -174,7 +174,7 @@ uint32_t SndfileSoundFile::resampleTail(uint32_t framesAlreadyOutput, PortableBu
 		outputSamples = mResamplers[ch]->process(resamplerInputBuf, framesToInput, resamplerOutput);
 
 		if (outputSamples > 0) {
-			// it's + *framesRead because in the event we hit the end of the file this iteration,
+			// it's + framesAlreadyOutput because in the event we hit the end of the file this iteration,
 			// we may not have filled the buffer but we may have read some samples already, so we
 			// we need to preserve what we already read and append to those values.
 			memcpy(static_cast<double *>(buffers.buffers[ch].data) + framesAlreadyOutput, resamplerOutput, outputSamples * sizeof(double));

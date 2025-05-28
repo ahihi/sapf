@@ -1,6 +1,7 @@
 #pragma once
 
 #ifndef SAPF_AUDIOTOOLBOX
+#include <cstdint>
 #include <vector>
 
 #include "VM.hpp"
