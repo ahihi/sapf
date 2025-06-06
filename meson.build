@@ -53,9 +53,9 @@ endif
 
 # libedit
 if host_machine.system() == 'windows'
-    deps += dependency('readline', required: true)
-    deps += dependency('history', required: true)
-    cpp_args += ['-DUSE_LIBEDIT=0', '-D_POSIX_THREAD_SAFE_FUNCTIONS']
+  deps += dependency('readline', required: true)
+  deps += dependency('history', required: true)
+  cpp_args += ['-DUSE_LIBEDIT=0', '-D_POSIX_THREAD_SAFE_FUNCTIONS']
 else
   deps += dependency('libedit', required: true)
   cpp_args += ['-DUSE_LIBEDIT=1']
@@ -64,6 +64,26 @@ endif
 if get_option('asan')
   cpp_args += ['-fsanitize=address', '-O1', '-fno-omit-frame-pointer', '-g']
   link_args += ['-fsanitize=address']
+endif
+
+if get_option('ubsan')
+  cpp_args += ['-fsanitize=undefined', '-O1', '-fno-omit-frame-pointer', '-g']
+  link_args += ['-fsanitize=undefined']
+endif
+
+if get_option('tsan')
+  cpp_args += ['-fsanitize=thread', '-O1', '-fno-omit-frame-pointer', '-g']
+  link_args += ['-fsanitize=thread']
+endif
+
+if get_option('msan')
+  cpp_args += ['-fsanitize=memory', '-O1', '-fno-omit-frame-pointer', '-g', '-fsanitize-memory-track-origins']
+  link_args += ['-fsanitize=memory']
+endif
+
+if get_option('lsan')
+  cpp_args += ['-fsanitize=leak', '-O1', '-fno-omit-frame-pointer', '-g']
+  link_args += ['-fsanitize=leak']
 endif
 
 if get_option('accelerate')
@@ -126,6 +146,13 @@ endif
 
 if get_option('manta')
   add_project_arguments('-DSAPF_MANTA', language: ['cpp', 'objcpp'])
+endif
+
+# has to be declared down here because it needs to come after any calls to
+# add_project_arguments
+subdir('third_party/r8brain')
+if not get_option('audiotoolbox')
+  deps += r8brain_dep
 endif
 
 # main should only be in release build because otherwise it conflicts with the main

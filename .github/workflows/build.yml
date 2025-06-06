@@ -7,28 +7,30 @@ on:
     branches: [ "main" ]
     
 jobs:
-  msys2-ucrt64:
+  msys2-clang64:
     runs-on: windows-latest
     defaults:
       run:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'  # This will initialize and update all submodules
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: CLANG64
           update: true
           install: >-
             base-devel 
-            mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-meson
-            mingw-w64-ucrt-x86_64-fftw
-            mingw-w64-ucrt-x86_64-libsndfile
-            mingw-w64-ucrt-x86_64-pkgconf
-            mingw-w64-ucrt-x86_64-rtaudio
-            mingw-w64-ucrt-x86_64-readline
-            mingw-w64-ucrt-x86_64-xsimd
-            mingw-w64-ucrt-x86_64-ca-certificates
+            mingw-w64-clang-x86_64-toolchain
+            mingw-w64-clang-x86_64-meson
+            mingw-w64-clang-x86_64-fftw
+            mingw-w64-clang-x86_64-libsndfile
+            mingw-w64-clang-x86_64-pkgconf
+            mingw-w64-clang-x86_64-rtaudio
+            mingw-w64-clang-x86_64-readline
+            mingw-w64-clang-x86_64-xsimd
+            mingw-w64-clang-x86_64-ca-certificates
       - name: CI-Build
         run: |
           meson setup --buildtype release build
@@ -55,6 +57,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'  # This will initialize and update all submodules
 
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
