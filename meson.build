@@ -20,6 +20,7 @@ sources = [
   'src/MultichannelExpansion.cpp',
   'src/Object.cpp',
   'src/Opcode.cpp',
+  'src/Osc.cpp',
   'src/OscilUGens.cpp',
   'src/Parser.cpp',
   'src/Play.cpp',
@@ -126,6 +127,11 @@ endif
 
 if get_option('manta')
   add_project_arguments('-DSAPF_MANTA', language: ['cpp', 'objcpp'])
+endif
+
+if get_option('osc')
+  add_project_arguments('-DSAPF_OSC', language: ['cpp', 'objcpp'])
+  deps += dependency('oscpack', required: true)
 endif
 
 # main should only be in release build because otherwise it conflicts with the main
