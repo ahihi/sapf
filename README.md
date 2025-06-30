@@ -12,7 +12,7 @@ git submodule init
 git submodule update
 ```
 
-a Nix flake is included. simply run:
+for Nix users, a flake is included. after [enabling flakes](https://nixos.wiki/wiki/Flakes), simply run:
 
 ```shell
 nix develop
