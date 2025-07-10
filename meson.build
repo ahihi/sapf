@@ -1,7 +1,7 @@
 project(
   'sapf',
   ['cpp'],
-  meson_version : '>=1.1'
+  meson_version : '>=1.0'
 )
 
 cpp = meson.get_compiler('cpp')
@@ -20,6 +20,7 @@ sources = [
   'src/MultichannelExpansion.cpp',
   'src/Object.cpp',
   'src/Opcode.cpp',
+  'src/Osc.cpp',
   'src/OscilUGens.cpp',
   'src/Parser.cpp',
   'src/Play.cpp',
@@ -146,6 +147,11 @@ endif
 
 if get_option('manta')
   add_project_arguments('-DSAPF_MANTA', language: ['cpp', 'objcpp'])
+endif
+
+if get_option('osc')
+  add_project_arguments('-DSAPF_OSC', language: ['cpp', 'objcpp'])
+  deps += dependency('oscpack', required: true)
 endif
 
 # has to be declared down here because it needs to come after any calls to
