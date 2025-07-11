@@ -1,7 +1,7 @@
 project(
   'sapf',
   ['cpp'],
-  meson_version : '>=1.0'
+  meson_version : '>=1.1'
 )
 
 cpp = meson.get_compiler('cpp')

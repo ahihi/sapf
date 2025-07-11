@@ -6,6 +6,7 @@
 #include <memory>
 #include <thread>
 #include <tuple>
+#include <unordered_map>
 #include <osc/OscReceivedElements.h>
 #include <osc/OscPacketListener.h>
 #include <ip/UdpSocket.h>
