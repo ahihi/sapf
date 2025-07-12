@@ -56,7 +56,6 @@ endif
 if host_machine.system() == 'windows'
   deps += dependency('readline', required: true)
   deps += dependency('history', required: true)
-  deps += cpp.find_library('ws2_32', required: true)
   cpp_args += ['-DUSE_LIBEDIT=0', '-D_POSIX_THREAD_SAFE_FUNCTIONS']
 else
   deps += dependency('libedit', required: true)
@@ -159,6 +158,10 @@ endif
 if get_option('osc')
   add_project_arguments('-DSAPF_OSC', language: ['cpp', 'objcpp'])
   deps += dependency('oscpack', required: true)
+  if host_machine.system() == 'windows'
+    deps += cpp.find_library('winmm', required: true)
+    deps += cpp.find_library('ws2_32', required: true)
+  endif
 endif
 
 # has to be declared down here because it needs to come after any calls to
