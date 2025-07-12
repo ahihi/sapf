@@ -141,6 +141,12 @@ if get_option('dispatch')
   add_project_arguments('-DSAPF_DISPATCH', language: ['cpp', 'objcpp'])
 endif
 
+if get_option('f64_samples')
+  add_project_arguments('-DSAMPLE_IS_DOUBLE=1', language: ['cpp', 'objcpp'])
+else
+  add_project_arguments('-DSAMPLE_IS_DOUBLE=0', language: ['cpp', 'objcpp'])
+endif
+
 if get_option('mach_time')
   add_project_arguments('-DSAPF_MACH_TIME', language: ['cpp', 'objcpp'])
 endif
