@@ -16,6 +16,9 @@
             libdispatch = final.callPackage ./nix/libdispatch/default.nix {
               stdenv = (llvmPackages final).stdenv;
             };
+            oscpack = final.callPackage ./nix/oscpack/default.nix {
+              stdenv = (llvmPackages final).stdenv;
+            };
             sapf = final.callPackage ./default.nix {};
           };
       } //
@@ -42,6 +45,7 @@
               fftw
               libedit
               libsndfile
+              # oscpack
               rtaudio_6
               xsimd
             ];
