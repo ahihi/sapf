@@ -6,6 +6,35 @@ this is a highly work-in-progress fork of James McCartney's [sapf](https://githu
 
 ## building
 
+### build in docker
+
+```shell
+docker build . -t sapf 
+```
+
+This will build a local image based on ubuntu along with running tests during the build.
+
+Test it:
+
+```shell
+docker run --rm -ti sapf
+```
+
+You will see a command prompt:
+```
+------------------------------------------------                                                                        
+A tool for the expression of sound as pure form.
+------------------------------------------------
+--- version 0.1.21
+Type 'helpall' to get a list of all built-in functions.
+Type 'quit' to quit.
+sapf> 2 3 +
+5
+sapf> 
+```
+
+### build locally
+
 Ensure submodules are initialized if you didn't clone with `--recursive`:
 ```shell
 git submodule init
