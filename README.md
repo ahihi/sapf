@@ -33,6 +33,20 @@ sapf> 2 3 +
 sapf> 
 ```
 
+Simplest way to actually hear sounds at Linux is to run container as follows: 
+
+```
+docker run --rm -ti --privileged -v /dev/snd:/dev/snd sapf 
+```
+
+And then, for example: 
+
+```
+sapf> ((.4 0 lfsaw) 2 * ([8 7.23] 0 lfsaw) .25 * 9.667 + + exp2) 0 sinosc .04 * .2 0 4 combn play
+sapf> ; listen for some time
+sapf> stop ; stop it
+```
+
 ### build locally
 
 Ensure submodules are initialized if you didn't clone with `--recursive`:

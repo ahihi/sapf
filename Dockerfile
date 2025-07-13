@@ -22,5 +22,8 @@ RUN meson test --verbose -C build
 FROM base AS sapf 
 
 COPY --from=build /src/build/sapf /usr/bin/sapf
+RUN mkdir /sapf
+ADD ./sapf-*.txt /sapf
+WORKDIR /sapf
 
-CMD ["/usr/bin/sapf"]
+CMD ["/usr/bin/sapf", "-p", "sapf-prelude.txt"]
