@@ -12,6 +12,49 @@ git submodule init
 git submodule update
 ```
 
+### build in docker
+
+```shell
+docker build . -t sapf 
+```
+
+This will build a local image based on ubuntu along with running tests during the build.
+
+Test it:
+
+```shell
+docker run --rm -ti sapf
+```
+
+You will see a command prompt:
+```
+------------------------------------------------                                                                        
+A tool for the expression of sound as pure form.
+------------------------------------------------
+--- version 0.1.21
+Type 'helpall' to get a list of all built-in functions.
+Type 'quit' to quit.
+sapf> 2 3 +
+5
+sapf> 
+```
+
+Simplest way to actually hear sounds at Linux is to run container as follows: 
+
+```
+docker run --rm -ti --privileged -v /dev/snd:/dev/snd sapf 
+```
+
+And then, for example: 
+
+```
+sapf> ((.4 0 lfsaw) 2 * ([8 7.23] 0 lfsaw) .25 * 9.667 + + exp2) 0 sinosc .04 * .2 0 4 combn play
+sapf> ; listen for some time
+sapf> stop ; stop it
+```
+
+### build locally
+
 for Nix users, a flake is included. after [enabling flakes](https://nixos.wiki/wiki/Flakes), simply run:
 
 ```shell
