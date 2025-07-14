@@ -6,6 +6,12 @@ this is a highly work-in-progress fork of James McCartney's [sapf](https://githu
 
 ## building
 
+Ensure submodules are initialized if you didn't clone with `--recursive`:
+```shell
+git submodule init
+git submodule update
+```
+
 ### build in docker
 
 ```shell
@@ -48,12 +54,6 @@ sapf> stop ; stop it
 ```
 
 ### build locally
-
-Ensure submodules are initialized if you didn't clone with `--recursive`:
-```shell
-git submodule init
-git submodule update
-```
 
 for Nix users, a flake is included. after [enabling flakes](https://nixos.wiki/wiki/Flakes), simply run:
 
