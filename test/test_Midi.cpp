@@ -1,8 +1,13 @@
 
-#include "doctest.h"
+#if defined(SAPF_DOCTEST_H)
+#include SAPF_DOCTEST_H
+#else
+#include <doctest.h>
+#endif
 #include "Midi.hpp"
 #include "PortableMidiPacket.hpp"
 #include <vector>
+#include <cstring>
 
 void resetMidiState()
 {

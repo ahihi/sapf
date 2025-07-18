@@ -47,6 +47,7 @@
               libsndfile
               # oscpack
               rtaudio_6
+              rtmidi
               xsimd
             ];
 
