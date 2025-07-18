@@ -40,6 +40,8 @@ sources = [
   'src/Buffers.cpp',
   'src/AsyncAudioFileWriter.cpp',
   'src/ZArr.cpp',
+  'src/PortableMidiPacket.cpp',
+  'src/PortableMidiClient.cpp',
 ]
 deps = []
 cpp_args = ['-std=c++17']
@@ -134,6 +136,8 @@ endif
 if get_option('coremidi')
   add_project_arguments('-DSAPF_COREMIDI', language: ['cpp', 'objcpp'])
   link_args += ['-framework', 'CoreMIDI']
+else
+  deps += dependency('rtmidi', required: true)
 endif
 
 if get_option('dispatch')
@@ -270,7 +274,8 @@ test_sources = sources + [
   'test/test_SndfileSoundFile.cpp',
   'test/test_OscilUgens.cpp',
   'test/test_StreamOps.cpp',
-  'test/test_MathOps.cpp'
+  'test/test_MathOps.cpp',
+  'test/test_Midi.cpp',
 ]
 
 # Just like the main executable, this respects the buildtype param. The target architecture is
