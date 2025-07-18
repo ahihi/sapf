@@ -25,7 +25,6 @@
 #include <filesystem>
 #include <fstream>
 #include <valarray>
-#include <array>
 #include <sndfile.h>
 #include <fftw3.h>
 #include <complex>
@@ -87,7 +86,7 @@ TEST_CASE("SndfileSoundFile file writing") {
 		vector<float> buf(numChannels * bufferSize, 0);
         PortableBuffers bufs{1};
 		const auto sndfile = SndfileSoundFile::create(testFileName.c_str(), numChannels,
-		    sampleRate, 0., true, bufferSize, false);
+		    sampleRate, 0., false);
 		bufs.setNumChannels(0, numChannels);
 		bufs.setData(0, &buf[0]);
 		bufs.setSize(0, bufferSize * sizeof(float));
@@ -215,7 +214,7 @@ pair<unique_ptr<PortableBuffers>, vector<vector<double>>> createPortableBuffers(
         portableBufs->setData(channel, bufData[channel].data());
         portableBufs->setSize(channel, bufferSize * sizeof(double));
     }
-        
+
     return {move(portableBufs), move(bufData)};
 }
 
@@ -255,52 +254,52 @@ TEST_CASE("SndfileSoundFile file reading with resampling") {
     if (exists(testFileName)) {
         remove(testFileName);
     }
-    
+
     SUBCASE("single channel") {
         numChannels = 1;
         numInputFrames = 1024*10;
     }
-    
+
     SUBCASE("single channel upsample") {
         numChannels = 1;
         numInputFrames = 1024*10;
         srcSampleRate = 22050;
     }
-    
+
     SUBCASE("single channel downsample") {
         numChannels = 1;
         numInputFrames = 1024*10;
         srcSampleRate = 88200;
     }
-    
+
     SUBCASE("stereo channel") {
         numChannels = 2;
         numInputFrames = 1024*10;
     }
-    
+
     SUBCASE("stereo channel upsample") {
         numChannels = 2;
         numInputFrames = 1024*10;
         srcSampleRate = 22050;
     }
-    
+
     SUBCASE("stereo channel downsample") {
         numChannels = 2;
         numInputFrames = 1024*10;
         srcSampleRate = 88200;
     }
-    
+
     SUBCASE("8 channel") {
         numChannels = 8;
         numInputFrames = 1024*10;
     }
-    
+
     SUBCASE("8 channel upsample") {
         numChannels = 8;
         numInputFrames = 1024*10;
         srcSampleRate = 22050;
     }
-    
+
     SUBCASE("8 channel downsample") {
         numChannels = 8;
         numInputFrames = 1024*10;
@@ -314,7 +313,7 @@ TEST_CASE("SndfileSoundFile file reading with resampling") {
         srcSampleRate = 22050;
         framesToPull = 777;
     }
-    
+
     SUBCASE("8 channel downsample odd frames") {
         numChannels = 8;
         numInputFrames = 800*9+11;
@@ -336,7 +335,7 @@ TEST_CASE("SndfileSoundFile file reading with resampling") {
         // an output file for manual verification
         constexpr bool outputResampled{true};
         constexpr double dstSampleRate{44100};
-        
+
         auto srcFile = SndfileSoundFile::open(testFileName.c_str(), dstSampleRate,
                                               bufferSize);
 

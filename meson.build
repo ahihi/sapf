@@ -37,9 +37,9 @@ sources = [
   'src/Types.cpp',
   'src/UGen.cpp',
   'src/VM.cpp',
-  'src/ZArr.cpp',
   'src/Buffers.cpp',
   'src/AsyncAudioFileWriter.cpp',
+  'src/ZArr.cpp',
   'src/PortableMidiPacket.cpp',
   'src/PortableMidiClient.cpp',
 ]
@@ -120,7 +120,7 @@ if get_option('carbon')
 endif
 
 if get_option('cocoa')
-  add_project_arguments('-DSAPF_COCOA', '-std=c++17', language: ['cpp', 'objcpp'])
+  add_project_arguments('-DSAPF_COCOA', language: ['cpp', 'objcpp'])
   sources += ['src/makeImage.mm']
   add_languages('objcpp', required : true)
   link_args += ['-framework', 'Cocoa']
@@ -137,7 +137,7 @@ if get_option('coremidi')
   add_project_arguments('-DSAPF_COREMIDI', language: ['cpp', 'objcpp'])
   link_args += ['-framework', 'CoreMIDI']
 else
-  deps += dependency('rtmidi', required: true) 
+  deps += dependency('rtmidi', required: true)
 endif
 
 if get_option('dispatch')
@@ -252,18 +252,31 @@ executable(
 )
 
 # tests
-test_deps = deps + dependency('doctest', required: true)
+test_deps = deps
+test_includes = [include_directories('include'), include_directories('test/helpers')]
+test_cpp_args = cpp_args + '-DTEST_BUILD'
+
+# sometimes, in particular on Nix, the doctest dependency is not found, but the
+# header is still available. sometimes the header is doctest.h, sometimes it is
+# doctest/doctest.h. this is an attempt to deal with all of the above.
+if cpp.has_header('doctest.h')
+  # nothing to do
+elif cpp.has_header('doctest/doctest.h')
+  test_cpp_args += '-DSAPF_DOCTEST_H=<doctest/doctest.h>'
+else
+  test_deps += dependency('doctest', required: true)
+endif
+
 test_sources = sources + [
   'test/doctest.cpp',
-  'test/test_OscilUgens.cpp',
-  'test/test_StreamOps.cpp',
   'test/test_MathOps.cpp',
   'test/test_AsyncAudioFileWriter.cpp',
   'test/test_SndfileSoundFile.cpp',
+  'test/test_OscilUgens.cpp',
+  'test/test_StreamOps.cpp',
+  'test/test_MathOps.cpp',
   'test/test_Midi.cpp',
 ]
-test_includes = [include_directories('include'), include_directories('test/helpers')]
-test_cpp_args = cpp_args + '-DTEST_BUILD'
 
 # Just like the main executable, this respects the buildtype param. The target architecture is
 # omitted if it's a debug build, ensuring the best debugging experience

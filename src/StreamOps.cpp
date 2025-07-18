@@ -5837,7 +5837,7 @@ void blackman_(Thread& th, Prim* prim)
 #ifdef SAPF_ACCELERATE
 	vDSP_blkman_windowD(out->mArray->z(), n, 0);
 #else
-	Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n-1);
+	Eigen::ArrayXd arr = Eigen::ArrayXd::LinSpaced(n, 0, n - 1);
 	ZArr outzarr = zarr(out->mArray->z(), n, 1);
 	outzarr = 0.42
 		- .5 * (2.0 * M_PI * arr / n).cos()

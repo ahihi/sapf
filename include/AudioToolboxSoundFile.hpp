@@ -16,7 +16,7 @@ public:
 	uint32_t mNumChannels;
 	std::string mPath;
 
-	static std::unique_ptr<AudioToolboxSoundFile> open(const char* path, double theadSampleRate);
+	static std::unique_ptr<AudioToolboxSoundFile> open(const char* path, double threadSampleRate);
 	static std::unique_ptr<AudioToolboxSoundFile> create(const char *path, int numChannels, double threadSampleRate, double fileSampleRate, bool interleaved);
 };
 

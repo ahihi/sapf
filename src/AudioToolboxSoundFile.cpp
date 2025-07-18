@@ -18,7 +18,7 @@ int AudioToolboxSoundFile::pull(uint32_t *framesRead, AudioBuffers& buffers) {
 	return ExtAudioFileRead(this->mXAF, framesRead, buffers.abl);
 }
 
-std::unique_ptr<AudioToolboxSoundFile> AudioToolboxSoundFile::open(const char* path, const double theadSampleRate) {
+std::unique_ptr<AudioToolboxSoundFile> AudioToolboxSoundFile::open(const char* path, const double threadSampleRate) {
 	CFStringRef cfpath = CFStringCreateWithFileSystemRepresentation(0, path);
 	if (!cfpath) {
 		post("failed to create path\n");
@@ -52,7 +52,7 @@ std::unique_ptr<AudioToolboxSoundFile> AudioToolboxSoundFile::open(const char* p
 	int numChannels = fileFormat.mChannelsPerFrame;
 
 	AudioStreamBasicDescription clientFormat = {
-		theadSampleRate,
+		threadSampleRate,
 		kAudioFormatLinearPCM,
 		kAudioFormatFlagsNativeFloatPacked | kAudioFormatFlagIsNonInterleaved,
 		static_cast<UInt32>(sizeof(double)),

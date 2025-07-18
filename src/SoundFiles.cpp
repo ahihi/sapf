@@ -202,7 +202,7 @@ std::unique_ptr<SoundFile> sfcreate(Thread& th, const char* path, int numChannel
 #else
 std::unique_ptr<SoundFile> sfcreate(Thread& th, const char* path, int numChannels, double fileSampleRate, bool interleaved, bool async)
 {
-	return SoundFile::create(path, numChannels, th.rate.sampleRate, fileSampleRate, interleaved, th.rate.blockSize, async);
+	return SoundFile::create(path, numChannels, th.rate.sampleRate, fileSampleRate, async);
 }
 #endif
 

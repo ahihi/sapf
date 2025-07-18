@@ -2,7 +2,7 @@ name: Compile
 
 on:
   push:
-    branches: [ "main"]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
     
@@ -48,7 +48,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        include:
+          - os: ubuntu-latest
+            build_type: cross-platform
+          - os: macos-latest
+            build_type: native
+          - os: macos-latest
+            build_type: cross-platform
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -60,20 +66,31 @@ jobs:
       if: runner.os == 'Linux'
       run: .github/scripts/install-debian-deps.sh
 
-    - name: Install macOS Dependencies
-      if: runner.os == 'macOS'
-      run: .github/scripts/install-macos-deps.sh
+    - name: Install macOS Native Dependencies
+      if: runner.os == 'macOS' && matrix.build_type == 'native'
+      run: .github/scripts/install-macos-native-deps.sh
+
+    - name: Install macOS Cross-Platform Dependencies
+      if: runner.os == 'macOS' && matrix.build_type == 'cross-platform'
+      run: .github/scripts/install-macos-cross-platform-deps.sh
 
     - name: Setup Linux
       if: runner.os == 'Linux'
       run: meson setup --buildtype release build
 
-    - name: Setup macOS
-      if: runner.os == 'macOS'
-      run: meson setup --buildtype release -Daccelerate=true 
-        -Daudiotoolbox=true -Dapple_lock=true -Dcarbon=true 
-        -Dcocoa=true -Dcorefoundation=true -Dcoremidi=true 
+    - name: Setup macOS Native
+      if: runner.os == 'macOS' && matrix.build_type == 'native'
+      run: meson setup --buildtype release -Daccelerate=true
+        -Daudiotoolbox=true -Dapple_lock=true -Dcarbon=true
+        -Dcocoa=true -Dcorefoundation=true -Dcoremidi=true
         -Dmach_time=true -Ddispatch=true -Dmanta=false build
+
+    - name: Setup macOS Cross-Platform
+      if: runner.os == 'macOS' && matrix.build_type == 'cross-platform'
+      run: meson setup --buildtype release -Daccelerate=false
+        -Daudiotoolbox=false -Dapple_lock=false -Dcarbon=false
+        -Dcocoa=false -Dcorefoundation=false -Dcoremidi=false
+        -Dmach_time=false -Ddispatch=false -Dmanta=false build
 
     - name: Test
       run: meson test --verbose -C build
@@ -90,5 +107,5 @@ jobs:
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: meson-build-log-${{ runner.os }}.txt
+        name: meson-build-log-${{ runner.os }}-${{ matrix.build_type }}.txt
         path: build/meson-logs/meson-log.txt

@@ -1,3 +1,8 @@
 HOMEBREW_NO_AUTO_UPDATE=1 brew install \
+  fftw \
   libedit \
-  meson
+  libsndfile \
+  meson \
+  rtaudio \
+  rtmidi \
+  xsimd

@@ -143,16 +143,14 @@ struct Player {
 	int numChannels();
 	int32_t createGraph();
 	void stop();
-
+	
 	Thread th;
 	int count; // unused?
 	bool done;
 	Player* prev;
 	Player* next;
 	PlayerBackend backend;
-	// AudioComponentInstance outputUnit;
 	ZIn in[kMaxChannels];
-	// ExtAudioFileRef xaf = nullptr;
 	std::unique_ptr<SoundFile> soundFile;
 
 };

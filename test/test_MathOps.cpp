@@ -15,7 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "Object.hpp"
-#include "doctest.h"
+#if defined(SAPF_DOCTEST_H)
+#include SAPF_DOCTEST_H
+#else
+#include <doctest.h>
+#endif
 #include <array>
 #include "ZArr.hpp"
 
@@ -260,4 +264,54 @@ TEST_CASE("atan2") {
 	SUBCASE("poz / neg") {
 		check_binop_loopz(*gBinaryOpPtr_atan2, {1, 2, 3}, 1, {-4, -5, -6}, 0);
 	}
+}
+
+extern BinaryOp* gBinaryOpPtr_plus;
+extern BinaryOp* gBinaryOpPtr_minus;
+extern BinaryOp* gBinaryOpPtr_mul;
+extern BinaryOp* gBinaryOpPtr_div;
+extern BinaryOp* gBinaryOpPtr_copysign;
+extern BinaryOp* gBinaryOpPtr_pow;
+extern BinaryOp* gBinaryOpPtr_min;
+extern BinaryOp* gBinaryOpPtr_max;
+extern BinaryOp* gBinaryOpPtr_hypot;
+
+#define CHECK_IDENTITY_BINOP(op) \
+	do { \
+		SUBCASE(#op) { \
+			SUBCASE("stride 1") { check_binop_loopz(*gBinaryOpPtr_##op, 1, 1); } \
+			SUBCASE("stride 0") { check_binop_loopz(*gBinaryOpPtr_##op, 0, 0); } \
+			SUBCASE("astride 1") { check_binop_loopz(*gBinaryOpPtr_##op, 1, 0); } \
+			SUBCASE("bstride 1") { check_binop_loopz(*gBinaryOpPtr_##op, 0, 1); } \
+			SUBCASE("a 0") { check_binop_loopz(*gBinaryOpPtr_##op, {0}, 0, {4, 5, 6}, 1); } \
+			SUBCASE("b 0") { check_binop_loopz(*gBinaryOpPtr_##op, {1, 2, 3}, 1, {4, 5, 6}, 0); } \
+		} \
+	} while (0)
+
+TEST_CASE("identity optimized binops") {
+	CHECK_IDENTITY_BINOP(plus);
+	CHECK_IDENTITY_BINOP(minus);
+	CHECK_IDENTITY_BINOP(div);
+	CHECK_IDENTITY_BINOP(mul);
+}
+
+#define CHECK_BINOP(op) \
+	do { \
+		SUBCASE(#op) { \
+			check_binop_loopz(*gBinaryOpPtr_##op, 1, 1); \
+		} \
+	} while (0)
+
+TEST_CASE("other binops") {
+	CHECK_BINOP(copysign);
+	CHECK_BINOP(pow);
+	CHECK_BINOP(min);
+	CHECK_BINOP(max);
+	CHECK_BINOP(hypot);
+}
+
+TEST_CASE("binop copysign negative handling") {
+	check_binop_loopz(*gBinaryOpPtr_copysign, {-1, -2, -3}, 1, {4, 5, 6}, 1);
+	check_binop_loopz(*gBinaryOpPtr_copysign, {1, 2, 3}, 1, {-4, -5, -6}, 1);
+	check_binop_loopz(*gBinaryOpPtr_copysign, {-1, -2, -3}, 1, {-4, -5, -6}, 1);
 }
