@@ -13,9 +13,9 @@
 class AUBuffers {
 public:
     AUBuffers(AudioBufferList *inIoData);
-    uint32_t count();
-    float *data(int channel);
-    uint32_t size(int channel);
+    uint32_t count() const;
+    float *data(int channel) const;
+    uint32_t size(int channel) const;
     AudioBufferList *ioData;
 };
 typedef AUBuffers Buffers;

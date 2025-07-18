@@ -1,0 +1,9 @@
+[wrap-file]
+directory = xsimd-13.2.0
+source_url = https://github.com/xtensor-stack/xsimd/archive/refs/tags/13.2.0.tar.gz
+source_filename = xsimd-13.2.0.tar.gz
+source_hash = edd8cd3d548c185adc70321c53c36df41abe64c1fe2c67bc6d93c3ecda82447a
+method = cmake
+
+[provide]
+xsimd = xsimd_dep

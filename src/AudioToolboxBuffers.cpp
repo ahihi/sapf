@@ -3,7 +3,7 @@
 
 AudioToolboxBuffers::AudioToolboxBuffers(int inNumChannels) {
 	this->abl = (AudioBufferList*)calloc(1, sizeof(AudioBufferList) + (inNumChannels - 1) * sizeof(AudioBuffer));
-	this->abl->mNumChannels = inNumChannels;
+	this->abl->mNumberBuffers = inNumChannels;
 }
 
 AudioToolboxBuffers::~AudioToolboxBuffers() {
@@ -11,18 +11,18 @@ AudioToolboxBuffers::~AudioToolboxBuffers() {
 }
 
 uint32_t AudioToolboxBuffers::numChannels() {
-	return this->abl->mNumChannels;
+	return this->abl->mNumberBuffers;
 }
 
 void AudioToolboxBuffers::setNumChannels(size_t i, uint32_t numChannels) {
-	this->abl[i].mNumberChannels = numChannels;
+	this->abl->mBuffers[i].mNumberChannels = numChannels;
 }
 
 void AudioToolboxBuffers::setData(size_t i, void *data) {
-	this->abl[i].mData = data;
+	this->abl->mBuffers[i].mData = data;
 }
 
 void AudioToolboxBuffers::setSize(size_t i, uint32_t size) {
-	this->abl[i].mDataByteSize = size;
+	this->abl->mBuffers[i].mDataByteSize = size;
 }
 #endif

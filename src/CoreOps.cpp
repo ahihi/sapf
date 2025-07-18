@@ -143,9 +143,9 @@ static void bab_(Thread& th, Prim* prim)
 	V a = sp[-1];
 	V b = sp[0];
 	th.push(b);
-
-	sp[-1] = b;
-	sp[0] = a;
+	sp = &th.top();
+	sp[-2] = b;
+	sp[-1] = a;
 }
 
 static void aab_(Thread& th, Prim* prim)
@@ -157,8 +157,9 @@ static void aab_(Thread& th, Prim* prim)
 	V* sp = &th.top();
 	V a = sp[-1];
 	V b = sp[0];
-	th.push(b);	
-	sp[0] = a;
+	th.push(b);
+	sp = &th.top();
+	sp[-1] = a;
 }
 
 static void aabb_(Thread& th, Prim* prim)
@@ -170,8 +171,9 @@ static void aabb_(Thread& th, Prim* prim)
 	V* sp = &th.top();
 	V a = sp[-1];
 	V b = sp[0];
-	th.push(b);	
-	sp[0] = a;
+	th.push(b);
+	sp = &th.top();
+	sp[-1] = a;
 	th.push(b);	
 }
 
@@ -1322,8 +1324,7 @@ static void glob_(Thread& th, Prim* prim)
 {
 	P<String> pat = th.popString("glob : pattern");
 	
-	glob_t g;
-	memset(&g, 0, sizeof(g));
+	glob_t g = {};
 	glob(pat->s, GLOB_MARK, nullptr, &g);
 
         size_t count;

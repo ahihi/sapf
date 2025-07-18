@@ -118,6 +118,7 @@ extern void AddUGenOps();
 extern void AddSetOps();
 extern void AddRandomOps();
 extern void AddMidiOps();
+extern void AddOscOps();
 
 const char* gVersionString = "0.1.21";
 
@@ -187,6 +188,7 @@ int main (int argc, const char * argv[])
     AddRandomOps();
 	AddUGenOps();
 	AddMidiOps();
+	AddOscOps();
     AddSetOps();
 	
 	

@@ -40,7 +40,12 @@ const int kBufSize = 1024;
 
 void makeRecordingPath(Arg filename, char* path, int len);
 
+#ifdef SAPF_AUDIOTOOLBOX
 std::unique_ptr<SoundFile> sfcreate(Thread& th, const char* path, int numChannels, double fileSampleRate, bool interleaved);
+#else
+// async indicates whether async writing should be supported, or only synchronous writing. They are mutually exclusive.
+std::unique_ptr<SoundFile> sfcreate(Thread& th, const char* path, int numChannels, double fileSampleRate, bool interleaved, bool async);
+#endif
 void sfwrite(Thread& th, V& v, Arg filename, bool openIt);
 void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames);
 

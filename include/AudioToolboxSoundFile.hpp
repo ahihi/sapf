@@ -6,7 +6,7 @@
 
 class AudioToolboxSoundFile {
 public:
-	AudioToolboxSoundFile(ExtAudioFileRef inXAF, uint32_t inNumChannels);
+	AudioToolboxSoundFile(ExtAudioFileRef inXAF, uint32_t inNumChannels, std::string inPath);
 	~AudioToolboxSoundFile();
 
 	uint32_t numChannels();
@@ -14,8 +14,9 @@ public:
 	
 	ExtAudioFileRef mXAF;
 	uint32_t mNumChannels;
+	std::string mPath;
 
-	static std::unique_ptr<AudioToolboxSoundFile> open(const char *path);
+	static std::unique_ptr<AudioToolboxSoundFile> open(const char* path, double theadSampleRate);
 	static std::unique_ptr<AudioToolboxSoundFile> create(const char *path, int numChannels, double threadSampleRate, double fileSampleRate, bool interleaved);
 };
 

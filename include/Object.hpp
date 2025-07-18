@@ -60,7 +60,9 @@ typedef V const& Arg;
 #define LOOP(I,N) for (int I = 0;  i < (N); ++I)
 #define LOOP2(I,S,N) for (int I = S;  i < (N); ++I)
 
+#ifndef SAMPLE_IS_DOUBLE
 #define SAMPLE_IS_DOUBLE 1
+#endif
 #if SAMPLE_IS_DOUBLE 
 typedef double Z;
 #else
@@ -985,7 +987,7 @@ struct ZIn : In
 	bool operator()(Thread& th, int& ioNum, int& outStride, Z*& outBuffer);
     bool onez(Thread& th, Z& z);
     bool peek(Thread& th, Z& z);
-	bool fill(Thread& th, int& ioNum, Z* outBuffer, int outStride);
+	bool fill(Thread& th, int& ioNum, double* outBuffer, int outStride);
 	bool fill(Thread& th, int& ioNum, float* outBuffer, int outStride);
 	bool mix(Thread& th, int& ioNum, Z* outBuffer);
 	bool bench(Thread& th, int& ioNum);
@@ -1118,8 +1120,8 @@ public:
 	void alloc(int64_t inCap);
 
 	int64_t size() const { return mSize; }
-    void setSize(size_t inSize) { mSize = inSize; }
-    void addSize(size_t inDelta) { mSize += inDelta; }
+    void setSize(int64_t inSize) { mSize = inSize; }
+    void addSize(int64_t inDelta) { mSize += inDelta; }
 	
 	void add(Arg value);
 	void put(int64_t i, Arg inItem);

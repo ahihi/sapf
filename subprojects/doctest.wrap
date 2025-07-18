@@ -7,4 +7,4 @@ source_fallback_url = https://github.com/mesonbuild/wrapdb/releases/download/doc
 wrapdb_version = 2.4.11-1
 
 [provide]
-dependency_names = doctest
+doctest_dep = doctest
