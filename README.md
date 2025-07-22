@@ -41,6 +41,7 @@ if not using Nix, you will need to install dependencies manually instead of the 
 - libsndfile
 - fftw
 - rtaudio
+- rtmidi
 - libxsimd
 
 for installing dependencies, you can refer to the CI scripts in this repo:
@@ -125,8 +126,9 @@ You can find and view info on packages on [msys2 packages](https://packages.msys
     mingw-w64-clang-x86_64-libsndfile \
     mingw-w64-clang-x86_64-pkgconf \
     mingw-w64-clang-x86_64-rtaudio \
+    mingw-w64-clang-x86_64-rtmidi \
     mingw-w64-clang-x86_64-readline \
-    mingw-w64-ucrt-x86_64-xsimd \
+    mingw-w64-clang-x86_64-xsimd \
     mingw-w64-clang-x86_64-ca-certificates
    ```
 5. Close and reopen the shell to ensure it loads everything you just installed. 

@@ -11,6 +11,7 @@
   # oscpack,
   pkg-config,
   rtaudio_6,
+  rtmidi,
   xsimd,
 }:
 
@@ -27,6 +28,7 @@ stdenv.mkDerivation (finalAttrs: {
     libsndfile
     # oscpack
     rtaudio_6
+    rtmidi
     xsimd
   ];
 

@@ -14,39 +14,31 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifdef SAPF_COREMIDI
+
 #include "Midi.hpp"
 #include "VM.hpp"
 #include "UGen.hpp"
 #include "ErrorCodes.hpp"
-#include <CoreMidi/CoreMidi.h>
 #include <vector>
-#include <mach/mach_time.h>
+#include "PortableMidiPacket.hpp"
+#include "PortableMidiClient.hpp"
+#ifdef SAPF_COREMIDI
+	#include <CoreMidi/CoreMidi.h>
+	#include <mach/mach_time.h>
+#else
+	#include <algorithm>
+	#include <string>
+	#include <RtMidi.h>
+#endif
 
-struct MidiChanState
-{
-	uint8_t control[128];
-	uint8_t polytouch[128];
-	uint8_t keyvel[128];
-	uint32_t numKeysDown;
-	uint16_t bend;
-	uint8_t touch;
-	uint8_t program;
-	uint8_t lastkey;
-	uint8_t lastvel;
-};
-
-const int kMaxMidiPorts = 16;
 MidiChanState gMidiState[kMaxMidiPorts][16];
 bool gMidiDebug = false;
-MIDIClientRef gMIDIClient = 0;
-MIDIPortRef gMIDIInPort[kMaxMidiPorts], gMIDIOutPort[kMaxMidiPorts];
-int gNumMIDIInPorts = 0, gNumMIDIOutPorts = 0;
-bool gMIDIInitialized = false;
+uint8_t gRunningStatus;
+bool gSysexFlag = false;
 
-static bool gSysexFlag = false;
-static Byte gRunningStatus = 0;
-std::vector<Byte> gSysexData;
+std::vector<uint8_t> gSysexData;
+
+static std::unique_ptr<PortableMidiClient> gMidiClient;
 
 static void sysexBegin() {
 	gRunningStatus = 0; // clear running status
@@ -62,463 +54,180 @@ static void sysexEndInvalid() {
 	gSysexFlag = false;
 }
 
-static int midiProcessSystemPacket(MIDIPacket *pkt, int chan) {
+int midiProcessSystemPacket(const PortableMidiPacket& pkt, const int chan) {
 	int index, data;
 	switch (chan) {
-	case 7: // added cp: Sysex EOX must be taken into account if first on data packet
-	case 0:
+		case 7: // added cp: Sysex EOX must be taken into account if first on data packet
+		case 0:
 		{
-		int last_uid = 0;
-		int m = pkt->length;
-		Byte* p_pkt = pkt->data;
-		Byte pktval;
+			int last_uid = 0;
+			auto m = pkt.length();
+			auto p_pkt = pkt.bytes();
+			uint8_t pktval;
 
-		while(m--) {
-			pktval = *p_pkt++;
-			if(pktval & 0x80) { // status byte
-				if(pktval == 0xF7) { // end packet
-					gSysexData.push_back(pktval); // add EOX
-					if(gSysexFlag)
-						sysexEnd(last_uid); // if last_uid != 0 rebuild the VM.
-					else
-						sysexEndInvalid(); // invalid 1 byte with only EOX can happen
-					break;
-				}
-				else if(pktval == 0xF0) { // new packet
-					if(gSysexFlag) {// invalid new one/should not happen -- but handle in case
-						// store the last uid value previous to invalid data to rebuild VM after sysexEndInvalid call
-						// since it may call sysexEnd() just after it !
-						sysexEndInvalid();
+			while(m--) {
+				pktval = *p_pkt++;
+				if(pktval & 0x80) { // status byte
+					if(pktval == 0xF7) { // end packet
+						gSysexData.push_back(pktval); // add EOX
+						if(gSysexFlag)
+							sysexEnd(last_uid); // if last_uid != 0 rebuild the VM.
+						else
+							sysexEndInvalid(); // invalid 1 byte with only EOX can happen
+						break;
 					}
-					sysexBegin(); // new sysex in
-					//gSysexData.push_back(pktval); // add SOX
+					else if(pktval == 0xF0) { // new packet
+						if(gSysexFlag) {// invalid new one/should not happen -- but handle in case
+							// store the last uid value previous to invalid data to rebuild VM after sysexEndInvalid call
+							// since it may call sysexEnd() just after it !
+							sysexEndInvalid();
+						}
+						sysexBegin(); // new sysex in
+						//gSysexData.push_back(pktval); // add SOX
+					}
+					else {// abnormal data in middle of sysex packet
+						//gSysexData.push_back(pktval); // add it as an abort message
+						sysexEndInvalid(); // flush invalid
+						m = 0; // discard all packet
+						break;
+					}
 				}
-				else {// abnormal data in middle of sysex packet
-					//gSysexData.push_back(pktval); // add it as an abort message
-					sysexEndInvalid(); // flush invalid
-					m = 0; // discard all packet
+				else if(gSysexFlag) {
+					//gSysexData.push_back(pktval); // add Byte
+				} else { // garbage - handle in case - discard it
 					break;
 				}
 			}
-			else if(gSysexFlag) {
-				//gSysexData.push_back(pktval); // add Byte
-			} else { // garbage - handle in case - discard it
-				break;
-			}
+			return (pkt.length()-m);
 		}
-		return (pkt->length-m);
-		}
-	break;
+			break;
 
-	case 1 :
-		index = pkt->data[1] >> 4;
-		data  = pkt->data[1] & 0xf;
-		switch (index) { case 1: case 3: case 5: case 7: { data = data << 4; } }
-		return 2;
+		case 1 :
+			index = pkt.bytes()[1] >> 4;
+			data  = pkt.bytes()[1] & 0xf;
+			switch (index) { case 1: case 3: case 5: case 7: { data = data << 4; } }
+			return 2;
 
-	case 2 : 	//songptr
-		return 3;
+		case 2 : 	//songptr
+			return 3;
 
-	case 3 :	// song select
-		return 2;
+		case 3 :	// song select
+			return 2;
 
-	case 8 :	//clock
-	case 10:	//start
-	case 11:	//continue
-	case 12: 	//stop
-	case 15:	//reset
-		gRunningStatus = 0; // clear running status
-		return 1;
+		case 8 :	//clock
+		case 10:	//start
+		case 11:	//continue
+		case 12: 	//stop
+		case 15:	//reset
+			gRunningStatus = 0; // clear running status
+			return 1;
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	return (1);
 }
 
-
-
-
-static void midiProcessPacket(MIDIPacket *pkt, int srcIndex)
+void midiProcessPacket(const PortableMidiPacket& pkt, const int srcIndex)
 {
-	if(pkt) {
-		int i = 0; 
-		while (i < pkt->length) {
-			uint8_t status = pkt->data[i] & 0xF0;
-			uint8_t chan = pkt->data[i] & 0x0F;
-			uint8_t a, b;
-
-			if(status & 0x80) // set the running status for voice messages
-				gRunningStatus = ((status >> 4) == 0xF) ? 0 : pkt->data[i]; // keep also additional info
-		L:
-			switch (status) {
-			case 0x80 : //noteOff
-				a = pkt->data[i+1];
-				b = pkt->data[i+2];
-				if (gMidiDebug) printf("midi note off %d %d %d %d\n", srcIndex, chan+1, a, b);
-				gMidiState[srcIndex][chan].keyvel[a] = 0;
-				--gMidiState[srcIndex][chan].numKeysDown;
-				i += 3;
-				break;
-			case 0x90 : //noteOn
-				a = pkt->data[i+1];
-				b = pkt->data[i+2];
-				if (gMidiDebug) printf("midi note on %d %d %d %d\n", srcIndex, chan+1, a, b);
-				if (b) {
-					gMidiState[srcIndex][chan].lastkey = a;
-					gMidiState[srcIndex][chan].lastvel = b;
-					++gMidiState[srcIndex][chan].numKeysDown;
-				} else {
-					--gMidiState[srcIndex][chan].numKeysDown;
-				}
-				gMidiState[srcIndex][chan].keyvel[a] = b;
-				i += 3;
-				break;
-			case 0xA0 : //polytouch
-				a = pkt->data[i+1];
-				b = pkt->data[i+2];
-				if (gMidiDebug) printf("midi poly %d %d %d %d\n", srcIndex, chan+1, a, b);
-				gMidiState[srcIndex][chan].polytouch[a] = b;
-				i += 3;
-				break;
-			case 0xB0 : //control
-				a = pkt->data[i+1];
-				b = pkt->data[i+2];
-				if (gMidiDebug) printf("midi control %d %d %d %d\n", srcIndex, chan+1, a, b);
-				gMidiState[srcIndex][chan].control[a] = b;
-				if (a == 120 || (a >= 123 && a <= 127)) {
-					// all notes off
-					memset(gMidiState[srcIndex][chan].keyvel, 0, 128);
-					gMidiState[srcIndex][chan].numKeysDown = 0;
-				} else if (a == 121) {
-					// reset ALL controls to zero, don't follow MMA recommended practices.
-					memset(gMidiState[srcIndex][chan].control, 0, 128);
-					gMidiState[srcIndex][chan].bend = 0x4000;
-				}
-				i += 3;
-				break;
-			case 0xC0 : //program
-				a = pkt->data[i+1];
-				gMidiState[srcIndex][chan].program = a;
-				if (gMidiDebug) printf("midi program %d %d %d\n", srcIndex, chan+1, a);
-				i += 2;
-				break;
-			case 0xD0 : //touch
-				a = pkt->data[i+1];
-				printf("midi touch %d %d\n", chan+1, a);
-				gMidiState[srcIndex][chan].touch = a;
-				i += 2;
-				break;
-			case 0xE0 : //bend
-				a = pkt->data[i+1];
-				b = pkt->data[i+2];
-				if (gMidiDebug) printf("midi bend %d %d %d %d\n", srcIndex, chan+1, a, b);
-				gMidiState[srcIndex][chan].bend = ((b << 7) | a) - 8192;
-				i += 3;
-				break;
-			case 0xF0 :
-				i += midiProcessSystemPacket(pkt, chan);
-				break;
-			default :	// data byte => continuing sysex message
-				if(gRunningStatus && !gSysexFlag) { // modified cp: handling running status. may be we should here
-					status = gRunningStatus & 0xF0; // accept running status only inside a packet beginning
-					chan = gRunningStatus & 0x0F;	// with a valid status byte ?
-					--i;
-					goto L; // parse again with running status set
-				}
-				chan = 0;
-				i += midiProcessSystemPacket(pkt, chan);
-				break;
-			}
-		}
-	}
-}
-
-static void midiReadProc(const MIDIPacketList *pktlist, void* readProcRefCon, void* srcConnRefCon)
-{
-	MIDIPacket *pkt = (MIDIPacket*)pktlist->packet;
-	int srcIndex = (int)(size_t) srcConnRefCon;
-	for (uint32_t i=0; i<pktlist->numPackets; ++i) {
-		midiProcessPacket(pkt, srcIndex);
-		pkt = MIDIPacketNext(pkt);
-	}
-}
-
-static void midiNotifyProc(const MIDINotification *message, void *refCon)
-{
-	printf("midi notification %d %d\n", (int)message->messageID, (int)message->messageSize);
-}
-
-static struct mach_timebase_info machTimebaseInfo() {
-    struct mach_timebase_info info;
-    mach_timebase_info(&info);
-    return info;
-}
-
-static MIDITimeStamp midiTime(float latencySeconds)
-{
-    // add the latency expressed in seconds, to the current host time base.
-    static struct mach_timebase_info info = machTimebaseInfo(); // cache the timebase info.
-    Float64 latencyNanos = 1000000000 * latencySeconds;
-    MIDITimeStamp latencyMIDI = (latencyNanos / (Float64)info.numer) * (Float64)info.denom;
-    return (MIDITimeStamp)mach_absolute_time() + latencyMIDI;
-}
-
-void sendmidi(int port, MIDIEndpointRef dest, int length, int hiStatus, int loStatus, int aval, int bval, float late);
-void sendmidi(int port, MIDIEndpointRef dest, int length, int hiStatus, int loStatus, int aval, int bval, float late)
-{
-	MIDIPacketList mpktlist;
-	MIDIPacketList * pktlist = &mpktlist;
-	MIDIPacket * pk = MIDIPacketListInit(pktlist);
-	ByteCount nData = (ByteCount) length;
-	pk->data[0] = (Byte) (hiStatus & 0xF0) | (loStatus & 0x0F);
-	pk->data[1] = (Byte) aval;
-	pk->data[2] = (Byte) bval;
-	pk = MIDIPacketListAdd(pktlist, sizeof(struct MIDIPacketList) , pk, midiTime(late), nData, pk->data);
-	/*OSStatus error =*/ MIDISend(gMIDIOutPort[port],  dest, pktlist );
-}
-
-
-static int midiCleanUp()
-{
-	/*
-	* do not catch errors when disposing ports
-	* MIDIClientDispose should normally dispose the ports attached to it
-	* but clean up the pointers in case
-	*/
 	int i = 0;
-	for (i=0; i<gNumMIDIOutPorts; ++i) {
-		if (gMIDIOutPort[i]) {
-			MIDIPortDispose(gMIDIOutPort[i]);
-			gMIDIOutPort[i] = 0;
+	while (i < pkt.length()) {
+		uint8_t status = pkt.bytes()[i] & 0xF0;
+		uint8_t chan = pkt.bytes()[i] & 0x0F;
+		uint8_t a, b;
+
+		if(status & 0x80) // set the running status for voice messages
+			gRunningStatus = ((status >> 4) == 0xF) ? 0 : pkt.bytes()[i]; // keep also additional info
+	L:
+		switch (status) {
+		case 0x80 : //noteOff
+			a = pkt.bytes()[i+1];
+			b = pkt.bytes()[i+2];
+			if (gMidiDebug) printf("midi note off %d %d %d %d\n", srcIndex, chan+1, a, b);
+			gMidiState[srcIndex][chan].keyvel[a] = 0;
+			--gMidiState[srcIndex][chan].numKeysDown;
+			i += 3;
+			break;
+		case 0x90 : //noteOn
+			a = pkt.bytes()[i+1];
+			b = pkt.bytes()[i+2];
+			if (gMidiDebug) printf("midi note on %d %d %d %d\n", srcIndex, chan+1, a, b);
+			if (b) {
+				gMidiState[srcIndex][chan].lastkey = a;
+				gMidiState[srcIndex][chan].lastvel = b;
+				++gMidiState[srcIndex][chan].numKeysDown;
+			} else {
+				--gMidiState[srcIndex][chan].numKeysDown;
+			}
+			gMidiState[srcIndex][chan].keyvel[a] = b;
+			i += 3;
+			break;
+		case 0xA0 : //polytouch
+			a = pkt.bytes()[i+1];
+			b = pkt.bytes()[i+2];
+			if (gMidiDebug) printf("midi poly %d %d %d %d\n", srcIndex, chan+1, a, b);
+			gMidiState[srcIndex][chan].polytouch[a] = b;
+			i += 3;
+			break;
+		case 0xB0 : //control
+			a = pkt.bytes()[i+1];
+			b = pkt.bytes()[i+2];
+			if (gMidiDebug) printf("midi control %d %d %d %d\n", srcIndex, chan+1, a, b);
+			gMidiState[srcIndex][chan].control[a] = b;
+			if (a == 120 || (a >= 123 && a <= 127)) {
+				// all notes off
+				memset(gMidiState[srcIndex][chan].keyvel, 0, 128);
+				gMidiState[srcIndex][chan].numKeysDown = 0;
+			} else if (a == 121) {
+				// reset ALL controls to zero, don't follow MMA recommended practices.
+				memset(gMidiState[srcIndex][chan].control, 0, 128);
+				gMidiState[srcIndex][chan].bend = 0x4000;
+			}
+			i += 3;
+			break;
+		case 0xC0 : //program
+			a = pkt.bytes()[i+1];
+			gMidiState[srcIndex][chan].program = a;
+			if (gMidiDebug) printf("midi program %d %d %d\n", srcIndex, chan+1, a);
+			i += 2;
+			break;
+		case 0xD0 : //touch
+			a = pkt.bytes()[i+1];
+			printf("midi touch %d %d\n", chan+1, a);
+			gMidiState[srcIndex][chan].touch = a;
+			i += 2;
+			break;
+		case 0xE0 : //bend
+			a = pkt.bytes()[i+1];
+			b = pkt.bytes()[i+2];
+			if (gMidiDebug) printf("midi bend %d %d %d %d\n", srcIndex, chan+1, a, b);
+			gMidiState[srcIndex][chan].bend = ((b << 7) | a) - 8192;
+			i += 3;
+			break;
+		case 0xF0 :
+			i += midiProcessSystemPacket(pkt, chan);
+			break;
+		default :	// data byte => continuing sysex message
+			if(gRunningStatus && !gSysexFlag) { // modified cp: handling running status. may be we should here
+				status = gRunningStatus & 0xF0; // accept running status only inside a packet beginning
+				chan = gRunningStatus & 0x0F;	// with a valid status byte ?
+				--i;
+				goto L; // parse again with running status set
+			}
+			chan = 0;
+			i += midiProcessSystemPacket(pkt, chan);
+			break;
 		}
 	}
-	gNumMIDIOutPorts = 0;
-
-	for (i=0; i<gNumMIDIInPorts; ++i) {
-		if (gMIDIInPort[i]) {
-			MIDIPortDispose(gMIDIInPort[i]);
-			gMIDIInPort[i] = 0;
-		}
-	}
-	gNumMIDIInPorts = 0;
-
-	if (gMIDIClient) {
-		if( MIDIClientDispose(gMIDIClient) ) {
-			fprintf(stderr, "Error: failed to dispose MIDIClient\n" );
-			return errFailed;
-		}
-		gMIDIClient = 0;
-	}
-	return errNone;
 }
 
-static int prListMIDIEndpoints();
-
-static int midiInit(int numIn, int numOut)
-{
-	OSStatus err = noErr;
-	
-	midiCleanUp();
-
-	memset(gMidiState, 0, sizeof(gMidiState));
-	
-	numIn = std::clamp(numIn, 1, kMaxMidiPorts);
-	numOut = std::clamp(numOut, 1, kMaxMidiPorts);
-
-	int enc = kCFStringEncodingMacRoman;
-	CFAllocatorRef alloc = CFAllocatorGetDefault();
-
-	{
-		CFStringRef clientName = CFStringCreateWithCString(alloc, "SAPF", enc);
-		CFReleaser clientNameReleaser(clientName);
-
-		__block OSStatus err2 = noErr;
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			err2 = MIDIClientCreate(clientName, midiNotifyProc, nil, &gMIDIClient);
-		});
-		printf("gMIDIClient %d\n", (int)gMIDIClient);
-		if (err2) {
-			fprintf(stderr, "Could not create MIDI client. error %d\n", err);
-			return errFailed;
-		}
-	}
-
-	for (int i=0; i<numIn; ++i) {
-		char str[32];
-		snprintf(str, 32, "in%d\n", i);
-		CFStringRef inputPortName = CFStringCreateWithCString(alloc, str, enc);
-		CFReleaser inputPortNameReleaser(inputPortName);
-
-		err = MIDIInputPortCreate(gMIDIClient, inputPortName, midiReadProc, &i, gMIDIInPort+i);
-		if (err) {
-			gNumMIDIInPorts = i;
-			fprintf(stderr, "Could not create MIDI port %s. error %d\n", str, err);
-			return errFailed;
-		}
-	}
-
-	gNumMIDIInPorts = numIn;
-
-	for (int i=0; i<numOut; ++i) {
-		char str[32];
-		snprintf(str, 32, "out%d\n", i);
-		CFStringRef outputPortName = CFStringCreateWithCString(alloc, str, enc);
-		CFReleaser outputPortNameReleaser(outputPortName);
-
-		err = MIDIOutputPortCreate(gMIDIClient, outputPortName, gMIDIOutPort+i);
-		if (err) {
-			gNumMIDIOutPorts = i;
-			fprintf(stderr, "Could not create MIDI out port. error %d\n", err);
-			return errFailed;
-		}
-	}
-	gNumMIDIOutPorts = numOut;
-	
-	prListMIDIEndpoints();
-	
-	return errNone;
+void prConnectMIDIIn(const int uid, const int inputIndex) {
+	gMidiClient->connectInputPort(uid, inputIndex);
 }
 
-
-static int prListMIDIEndpoints()
-{
-	OSStatus error;
-	int numSrc = (int)MIDIGetNumberOfSources();
-	int numDst = (int)MIDIGetNumberOfDestinations();
-
-	printf("midi sources %d destinations %d\n", (int)numSrc, (int)numDst);
-
-	for (int i=0; i<numSrc; ++i) {
-		MIDIEndpointRef src = MIDIGetSource(i);
-		SInt32 uid = 0;
-		MIDIObjectGetIntegerProperty(src, kMIDIPropertyUniqueID, &uid);
-
-		MIDIEntityRef ent;
-		error = MIDIEndpointGetEntity(src, &ent);
-
-		CFStringRef devname, endname;
-		char cendname[1024], cdevname[1024];
-
-		// Virtual sources don't have entities
-		if(error)
-		{
-			MIDIObjectGetStringProperty(src, kMIDIPropertyName, &devname);
-			MIDIObjectGetStringProperty(src, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
-		}
-		else
-		{
-			MIDIDeviceRef dev;
-
-			MIDIEntityGetDevice(ent, &dev);
-			MIDIObjectGetStringProperty(dev, kMIDIPropertyName, &devname);
-			MIDIObjectGetStringProperty(src, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
-		}
-		
-		printf("MIDI Source %2d '%s', '%s' UID: %d\n", i, cdevname, cendname, uid);
-	}
-
-
-
-	for (int i=0; i<numDst; ++i) {
-		MIDIEndpointRef dst = MIDIGetDestination(i);
-		SInt32 uid = 0;
-		MIDIObjectGetIntegerProperty(dst, kMIDIPropertyUniqueID, &uid);
-
-		MIDIEntityRef ent;
-		error = MIDIEndpointGetEntity(dst, &ent);
-
-		CFStringRef devname, endname;
-		char cendname[1024], cdevname[1024];
-
-		// Virtual destinations don't have entities either
-		if(error)
-		{
-			MIDIObjectGetStringProperty(dst, kMIDIPropertyName, &devname);
-			MIDIObjectGetStringProperty(dst, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
-
-		}
-		else
-		{
-			MIDIDeviceRef dev;
-
-			MIDIEntityGetDevice(ent, &dev);
-			MIDIObjectGetStringProperty(dev, kMIDIPropertyName, &devname);
-			MIDIObjectGetStringProperty(dst, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
-		}
-		printf("MIDI Destination %2d '%s', '%s' UID: %d\n", i, cdevname, cendname, uid);
-	}
-	return errNone;
-}
-
-
-
-static int prConnectMIDIIn(int uid, int inputIndex)
-{
-	if (inputIndex < 0 || inputIndex >= gNumMIDIInPorts) return errOutOfRange;
-
-	MIDIEndpointRef src=0;
-	MIDIObjectType mtype;
-	MIDIObjectFindByUniqueID(uid, (MIDIObjectRef*)&src, &mtype);
-	if (mtype != kMIDIObjectType_Source) return errFailed;
-
-	//pass the uid to the midiReadProc to identify the src
-	void* p = (void*)(uintptr_t)inputIndex;
-	MIDIPortConnectSource(gMIDIInPort[inputIndex], src, p);
-
-	return errNone;
-}
-
-
-static int prDisconnectMIDIIn(int uid, int inputIndex)
-{
-	if (inputIndex < 0 || inputIndex >= gNumMIDIInPorts) return errOutOfRange;
-
-	MIDIEndpointRef src=0;
-	MIDIObjectType mtype;
-	MIDIObjectFindByUniqueID(uid, (MIDIObjectRef*)&src, &mtype);
-	if (mtype != kMIDIObjectType_Source) return errFailed;
-
-	MIDIPortDisconnectSource(gMIDIInPort[inputIndex], src);
-
-	return errNone;
-}
-
-
-static void midiStart_(Thread& th, Prim* prim)
-{
-	midiInit(16, 19);
-}
-
-static void midiRestart_(Thread& th, Prim* prim)
-{
-	MIDIRestart();
-}
-
-static void midiStop_(Thread& th, Prim* prim)
-{
-	midiCleanUp();
-}
-
-static void midiList_(Thread& th, Prim* prim)
-{
-	prListMIDIEndpoints();
-}
-
-static void midiConnectInput_(Thread& th, Prim* prim)
-{
-	int index = (int)th.popInt("midiConnectInput : port");
-	int uid = (int)th.popInt("midiConnectInput : sourceUID");
-	prConnectMIDIIn(uid, index);
+void prDisconnectMIDIIn(const int uid, const int inputIndex) {
+	gMidiClient->disconnectInputPort(uid, inputIndex);
 }
 
 static void midiDisconnectInput_(Thread& th, Prim* prim)
@@ -528,10 +237,133 @@ static void midiDisconnectInput_(Thread& th, Prim* prim)
 	prDisconnectMIDIIn(uid, index);
 }
 
+
+static void midiConnectInput_(Thread& th, Prim* prim)
+{
+	int index = (int)th.popInt("midiConnectInput : port");
+	int uid = (int)th.popInt("midiConnectInput : sourceUID");
+	prConnectMIDIIn(uid, index);
+}
+
+#ifdef SAPF_COREMIDI
+static void midiReadProc(const MIDIPacketList *pktlist, void* readProcRefCon, void* srcConnRefCon)
+{
+	MIDIPacket *pkt = (MIDIPacket*)pktlist->packet;
+	int srcIndex = (int)(size_t) srcConnRefCon;
+	for (uint32_t i=0; i<pktlist->numPackets; ++i) {
+		midiProcessPacket(PortableMidiPacket{pkt}, srcIndex);
+		pkt = MIDIPacketNext(pkt);
+	}
+}
+
+static void midiNotifyProc(const MIDINotification *message, void *refCon)
+{
+	printf("midi notification %d %d\n", (int)message->messageID, (int)message->messageSize);
+}
+
+// TODO: ATTOW midi output is not actually used even in upstream, so the below 3 functions
+//  are never called and are also not ported to RtMidi, but kept as reference if we want
+//  to add those operations later. I think these might be similar to functions in SuperCollider.
+static struct mach_timebase_info machTimebaseInfo() {
+	struct mach_timebase_info info;
+	mach_timebase_info(&info);
+	return info;
+}
+
+static MIDITimeStamp midiTime(float latencySeconds)
+{
+	// add the latency expressed in seconds, to the current host time base.
+	static struct mach_timebase_info info = machTimebaseInfo(); // cache the timebase info.
+	Float64 latencyNanos = 1000000000 * latencySeconds;
+	MIDITimeStamp latencyMIDI = (latencyNanos / (Float64)info.numer) * (Float64)info.denom;
+	return (MIDITimeStamp)mach_absolute_time() + latencyMIDI;
+}
+
+// void sendmidi(int port, MIDIEndpointRef dest, int length, int hiStatus, int loStatus, int aval, int bval, float late)
+// {
+// 	MIDIPacketList mpktlist;
+// 	MIDIPacketList * pktlist = &mpktlist;
+// 	MIDIPacket * pk = MIDIPacketListInit(pktlist);
+// 	ByteCount nData = (ByteCount) length;
+// 	pk->data[0] = (Byte) (hiStatus & 0xF0) | (loStatus & 0x0F);
+// 	pk->data[1] = (Byte) aval;
+// 	pk->data[2] = (Byte) bval;
+// 	pk = MIDIPacketListAdd(pktlist, sizeof(struct MIDIPacketList) , pk, midiTime(late), nData, pk->data);
+// 	/*OSStatus error =*/ MIDISend(gMIDIOutPort[port],  dest, pktlist );
+// }
+
 static void midiDebug_(Thread& th, Prim* prim)
 {
     gMidiDebug = th.popFloat("midiDebug : onoff") != 0.;
 }
+#else
+static void midiCallback(double timeStamp, std::vector<unsigned char>* message, void* userData)
+{
+    if (!message || message->empty()) return;
+    // userData contains the port index
+    size_t srcIndex = reinterpret_cast<size_t>(userData);
+    midiProcessPacket(PortableMidiPacket{*message}, srcIndex);
+}
+
+static void midiDebug_(Thread& th, Prim* prim)
+{
+    gMidiDebug = th.popFloat("midiDebug : onoff") != 0.;
+}
+
+#endif // SAPF_COREMIDI
+
+
+static int midiInit(int numIn, int numOut)
+{
+	memset(gMidiState, 0, sizeof(gMidiState));
+	
+	numIn = std::clamp(numIn, 1, kMaxMidiPorts);
+	numOut = std::clamp(numOut, 1, kMaxMidiPorts);
+
+	#ifdef SAPF_COREMIDI
+		gMidiClient = std::make_unique<PortableMidiClient>(numIn, numOut, midiReadProc, midiNotifyProc);
+	#else
+		gMidiClient = std::make_unique<PortableMidiClient>(numIn, numOut, &midiCallback);
+	#endif
+
+	PortableMidiClient::printMIDIEndpoints();
+	
+	return errNone;
+}
+
+static int midiCleanUp()
+{
+	gMidiClient = nullptr;
+	return errNone;
+}
+
+static void midiStart_(Thread& th, Prim* prim)
+{
+	midiInit(16, 19);
+}
+
+static void midiStop_(Thread& th, Prim* prim)
+{
+	midiCleanUp();
+}
+
+static void midiList_(Thread& th, Prim* prim)
+{
+	PortableMidiClient::printMIDIEndpoints();
+}
+
+
+#ifdef SAPF_COREMIDI
+static void midiRestart_(Thread& th, Prim* prim)
+{
+	MIDIRestart();
+}
+#else
+static void midiRestart_(Thread& th, Prim* prim)
+{
+	midiStart_(th, prim);
+}
+#endif
 
 const Z kOneOver127 = 1./127.;
 const Z kOneOver8191 = 1./8191.;
@@ -1087,7 +919,6 @@ struct MGate : public ZeroInputUGen<MGate>
 	}
 };
 
-
 struct ZCtl : public ZeroInputUGen<ZCtl>
 {
 	Z _b1;
@@ -1255,13 +1086,9 @@ static void xmlastvel_(Thread& th, Prim* prim)
 #define DEF(NAME, TAKES, LEAVES, HELP) 	vm.def(#NAME, TAKES, LEAVES, NAME##_, HELP);
 #define DEFMCX(NAME, N, HELP) 	vm.defmcx(#NAME, N, NAME##_, HELP);
 #define DEFAM(NAME, MASK, HELP) 	vm.defautomap(#NAME, #MASK, NAME##_, HELP);
-#else
-// TODO cross-platform midi backend
-#endif // SAPF_COREMIDI
 
 void AddMidiOps()
 {
-#ifdef SAPF_COREMIDI
 	vm.addBifHelp("\n*** MIDI control ***");
 	DEF(midiStart, 0, 0, "(-->) start up MIDI services");
 	DEF(midiRestart, 0, 0, "(-->) rescan MIDI services");
@@ -1306,6 +1133,5 @@ void AddMidiOps()
 
 	vm.addBifHelp("\n*** ZRef control signal ***");
 	DEFMCX(zctl, 1, "(zref --> out) makes a smoothed control signal from a zref.");
-#endif // SAPF_COREMIDI
 }
 

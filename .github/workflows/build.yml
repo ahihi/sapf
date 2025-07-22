@@ -29,6 +29,7 @@ jobs:
             mingw-w64-clang-x86_64-libsndfile
             mingw-w64-clang-x86_64-pkgconf
             mingw-w64-clang-x86_64-rtaudio
+            mingw-w64-clang-x86_64-rtmidi
             mingw-w64-clang-x86_64-readline
             mingw-w64-clang-x86_64-xsimd
             mingw-w64-clang-x86_64-ca-certificates

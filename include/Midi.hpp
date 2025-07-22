@@ -19,6 +19,31 @@
 
 #include <stdint.h>
 
+#include "PortableMidiClient.hpp"
+#include "PortableMidiPacket.hpp"
+
 void AddMidiOps();
+
+//below is only really needed for doctest
+struct MidiChanState
+{
+  uint8_t control[128];
+  uint8_t polytouch[128];
+  uint8_t keyvel[128];
+  uint32_t numKeysDown;
+  uint16_t bend;
+  uint8_t touch;
+  uint8_t program;
+  uint8_t lastkey;
+  uint8_t lastvel;
+};
+
+extern MidiChanState gMidiState[kMaxMidiPorts][16];
+extern bool gMidiDebug;
+extern uint8_t gRunningStatus;
+extern bool gSysexFlag;
+
+void midiProcessPacket(const PortableMidiPacket& pkt, int srcIndex);
+int midiProcessSystemPacket(const PortableMidiPacket& pkt, int chan);
 
 #endif /* defined(__taggeddoubles__Midi__) */
