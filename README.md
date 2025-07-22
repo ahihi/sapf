@@ -50,6 +50,10 @@ for installing dependencies, you can refer to the CI scripts in this repo:
 - [install-macos-native=deps.sh](.github/scripts/install-macos-native-deps.sh) (macOS with Homebrew, for builds using native macOS libraries)
 - [install-macos-cross-platform-deps.sh](.github/scripts/install-macos-cross-platform-deps.sh) (macOS with Homebrew, for builds using cross platform libraries)
 
+### building with Docker
+
+see Pavel Sutyrin's [Instructions fror Linux-based build in Docker](https://github.com/sutyrin/sapf?tab=readme-ov-file#build-in-docker).
+
 ## running tests
 Tests are written using doctest (which is obtained via a wrap) and located in the `tests` folder.
 See [the doctest documentation](https://github.com/doctest/doctest/tree/master?tab=readme-ov-file#documentation) for more details.
