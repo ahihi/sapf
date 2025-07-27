@@ -5,4 +5,5 @@ HOMEBREW_NO_AUTO_UPDATE=1 brew install \
   meson \
   rtaudio \
   rtmidi \
-  xsimd
+  xsimd \
+  jpeg-turbo

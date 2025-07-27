@@ -49,6 +49,7 @@
               rtaudio_6
               rtmidi
               xsimd
+              libjpeg
             ];
 
             # CC = "${stdenv}/bin/clang";

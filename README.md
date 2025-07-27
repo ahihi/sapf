@@ -43,6 +43,7 @@ if not using Nix, you will need to install dependencies manually instead of the 
 - rtaudio
 - rtmidi
 - libxsimd
+- libjpeg-turbo
 
 for installing dependencies, you can refer to the CI scripts in this repo:
 
@@ -133,6 +134,7 @@ You can find and view info on packages on [msys2 packages](https://packages.msys
     mingw-w64-clang-x86_64-rtmidi \
     mingw-w64-clang-x86_64-readline \
     mingw-w64-clang-x86_64-xsimd \
+    mingw-w64-clang-x86_64-libjpeg-turbo \
     mingw-w64-clang-x86_64-ca-certificates
    ```
 5. Close and reopen the shell to ensure it loads everything you just installed. 

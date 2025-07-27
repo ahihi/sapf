@@ -13,6 +13,7 @@
   rtaudio_6,
   rtmidi,
   xsimd,
+  libjpeg,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -30,6 +31,7 @@ stdenv.mkDerivation (finalAttrs: {
     rtaudio_6
     rtmidi
     xsimd
+    libjpeg
   ];
 
   nativeBuildInputs = [

@@ -121,11 +121,13 @@ endif
 
 if get_option('cocoa')
   add_project_arguments('-DSAPF_COCOA', language: ['cpp', 'objcpp'])
-  sources += ['src/makeImage.mm']
   add_languages('objcpp', required : true)
   link_args += ['-framework', 'Cocoa']
+  sources += ['src/makeImage.mm']
 else
-  sources += 'src/makeImage.cpp'
+  deps += dependency('libturbojpeg', required: true)
+  deps += dependency('libjpeg', required: true)
+  sources += ['src/makeImage.cpp']
 endif
 
 if get_option('corefoundation')
@@ -276,7 +278,13 @@ test_sources = sources + [
   'test/test_StreamOps.cpp',
   'test/test_MathOps.cpp',
   'test/test_Midi.cpp',
+  'test/test_Spectrogram.cpp',
 ]
+if get_option('cocoa')
+  test_sources += ['test/ImageHelpers.mm']
+else
+  test_sources += ['test/ImageHelpers.cpp']
+endif
 
 # Just like the main executable, this respects the buildtype param. The target architecture is
 # omitted if it's a debug build, ensuring the best debugging experience
