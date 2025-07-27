@@ -14,79 +14,79 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#import "makeImage.hpp"
-#import <Cocoa/Cocoa.h>
+#include "makeImage.hpp"
+#include <Cocoa/Cocoa.h>
 
-struct Bitmap
-{
-	NSBitmapImageRep* rep;
-	unsigned char* data;
-	int bytesPerRow;
+// Implementation of the wrapper class
+class CocoaImageRepWrapper {
+public:
+    NSBitmapImageRep* mRep;
+
+    CocoaImageRepWrapper(int width, int height) {
+        mRep = [[NSBitmapImageRep alloc]
+               initWithBitmapDataPlanes:NULL
+               pixelsWide:width
+               pixelsHigh:height
+               bitsPerSample:8
+               samplesPerPixel:3
+               hasAlpha:NO
+               isPlanar:NO
+               colorSpaceName:NSCalibratedRGBColorSpace
+               bytesPerRow:0
+               bitsPerPixel:24];
+    }
+
+    ~CocoaImageRepWrapper() {
+        [mRep release];
+    }
 };
 
-Bitmap* createBitmap(int width, int height)
+
+// Implementation of Bitmap methods for Cocoa
+Bitmap::Bitmap(int width, int height) {
+    mWidth = width;
+    mHeight = height;
+    mRepWrapper = new CocoaImageRepWrapper(width, height);
+    mData = [mRepWrapper->mRep bitmapData];
+    mBytesPerRow = [mRepWrapper->mRep bytesPerRow];
+}
+
+Bitmap::~Bitmap() {
+    delete mRepWrapper;
+}
+
+
+void Bitmap::setPixel(const int x, const int y, const int r, const int g, const int b)
 {
-	Bitmap* bitmap = (Bitmap*)calloc(1, sizeof(Bitmap));
-	bitmap->rep = 
-			[[NSBitmapImageRep alloc] 
-				initWithBitmapDataPlanes: nullptr
-				pixelsWide: width
-				pixelsHigh: height
-				bitsPerSample: 8
-				samplesPerPixel: 4
-				hasAlpha: YES
-				isPlanar: NO
-				colorSpaceName: NSCalibratedRGBColorSpace
-				bitmapFormat: NSAlphaNonpremultipliedBitmapFormat
-				bytesPerRow: 0
-				bitsPerPixel: 32
-			];
+    size_t index = mBytesPerRow * y + 3 * x;
+    unsigned char* data = mData;
 	
-	bitmap->data = [bitmap->rep bitmapData];
-	bitmap->bytesPerRow = (int)[bitmap->rep bytesPerRow];
-	return bitmap;
+    data[index+0] = r;
+    data[index+1] = g;
+    data[index+2] = b;
 }
 
-void setPixel(Bitmap* bitmap, int x, int y, int r, int g, int b, int a)
+void Bitmap::fillRect(const int x, const int y, const int width, const int height, const int r,
+    const int g, const int b)
 {
-	size_t index = bitmap->bytesPerRow * y + 4 * x;
-	unsigned char* data = bitmap->data;
-	
-	data[index+0] = r;
-	data[index+1] = g;
-	data[index+2] = b;
-	data[index+3] = a;
+    unsigned char* data = mData;
+    for (int j = y; j < y + height; ++j) {
+        size_t index = mBytesPerRow * j + 3 * x;
+        for (int i = x; i < x + width; ++i) {
+            data[index+0] = r;
+            data[index+1] = g;
+            data[index+2] = b;
+            index += 3;
+        }
+    }
 }
 
-void fillRect(Bitmap* bitmap, int x, int y, int width, int height, int r, int g, int b, int a)
+void Bitmap::write(const char *path) const
 {
-	unsigned char* data = bitmap->data;
-	for (int j = y; j < y + height; ++j) {
-		size_t index = bitmap->bytesPerRow * j + 4 * x;
-		for (int i = x; i < x + width; ++i) {
-			data[index+0] = r;
-			data[index+1] = g;
-			data[index+2] = b;
-			data[index+3] = a;
-			index += 4;
-		}
-	}
+    //NSData* data = [bitmap->rep TIFFRepresentation];
+    //NSDictionary* properties = @{ NSImageCompressionFactor: @.9 };
+    NSDictionary* properties = nullptr;
+    NSData* data = [mRepWrapper->mRep representationUsingType: NSJPEGFileType properties: properties];
+    NSString* nsstr = [NSString stringWithUTF8String: path];
+    [data writeToFile: nsstr atomically: YES];
 }
-
-void writeBitmap(Bitmap* bitmap, const char *path)
-{
-	//NSData* data = [bitmap->rep TIFFRepresentation];
-	//NSDictionary* properties = @{ NSImageCompressionFactor: @.9 };
-	NSDictionary* properties = nullptr;
-	NSData* data = [bitmap->rep representationUsingType: NSJPEGFileType properties: properties];
-	NSString* nsstr = [NSString stringWithUTF8String: path];
-	[data writeToFile: nsstr atomically: YES];
-}
-
-void freeBitmap(Bitmap* bitmap)
-{
-	//[bitmap->rep release];
-	free(bitmap);
-}
-
-

@@ -18,10 +18,16 @@
 #include "makeImage.hpp"
 #ifdef SAPF_ACCELERATE
 #include <Accelerate/Accelerate.h>
+#else
+#include <fftw3.h>
 #endif // SAPF_ACCELERATE
 #include <math.h>
 #include <stdio.h>
-#include <string.h>
+#include <vector>
+#include <array>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 
 static void makeColorTable(unsigned char* table);
 
@@ -96,46 +102,42 @@ static void calcKaiserWindowD(size_t size, double* window, double stopBandAttenu
 
 const int border = 8;
 
-void spectrogram(int size, double* data, int width, int log2bins, const char* path, double dBfloor)
+void spectrogram(const int size, const double* data, const int width, const int log2bins, const char* path, const double dBfloor)
 {
+    const int numRealFreqs = 1 << log2bins;
+    const int log2n = log2bins + 1;
+    const int n = 1 << log2n;
+    const int nOver2 = n / 2;
+    const double scale = 1./nOver2;
+    const int64_t paddedSize = size + n;
+    
+    std::vector paddedData(paddedSize, 0.0);
+    memcpy(paddedData.data() + nOver2, data, size * sizeof(double));
+
+    std::vector dBMags(numRealFreqs + 1, 0.0);
+
+    const double hopSize = size <= n ? 0 : static_cast<double>(size - n) / static_cast<double>(width - 1);
+
+    std::vector window(n, 1.0);
+    calcKaiserWindowD(n, window.data(), -180.);
+
+    std::array<unsigned char, 1028> table{};
+    makeColorTable(table.data());
+
+    constexpr int heightOfAmplitudeView{128};
+    const int heightOfFFT{numRealFreqs + 1};
+    const int totalHeight{heightOfAmplitudeView + heightOfFFT + 3 * border};
+    constexpr int topOfSpectrum{heightOfAmplitudeView + 2 * border};
+    const int totalWidth{width + 2 * border};
+    
+    Bitmap b{totalWidth, totalHeight};
+    b.fillRect(0, 0, totalWidth, totalHeight, 160, 160, 160);
+    b.fillRect(border, border, width, heightOfAmplitudeView, 0, 0, 0);
+
+    std::vector windowedData(n, 0.0);
+
 #ifdef SAPF_ACCELERATE
-	int numRealFreqs = 1 << log2bins;
-
-	int log2n = log2bins + 1;
-	int n = 1 << log2n;
-	int nOver2 = n / 2;
-	
-
-	double scale = 1./nOver2;
-	
-	int64_t paddedSize = size + n;
-	double* paddedData = (double*)calloc(paddedSize, sizeof(double));
-	memcpy(paddedData + nOver2, data, size * sizeof(double));
-
-	
-	double* dBMags = (double*)calloc(numRealFreqs + 1, sizeof(double));
-
-	double hopSize = size <= n ? 0 : (double)(size - n) / (double)(width - 1);
-
-	double* window = (double*)calloc(n, sizeof(double));
-	for (int i = 0; i < n; ++i) window[i] = 1.;
-	calcKaiserWindowD(n, window, -180.);
-
-	unsigned char table[1028];
-	makeColorTable(table);
-
-	int heightOfAmplitudeView = 128;
-	int heightOfFFT = numRealFreqs+1;
-	int totalHeight = heightOfAmplitudeView+heightOfFFT+3*border;
-	int topOfSpectrum = heightOfAmplitudeView + 2*border;
-	int totalWidth = width+2*border;
-	Bitmap* b = createBitmap(totalWidth, totalHeight);
-	fillRect(b, 0, 0, totalWidth, totalHeight, 160, 160, 160, 255);
-	fillRect(b, border, border, width, heightOfAmplitudeView, 0, 0, 0, 255);
-	
 	FFTSetupD fftSetup = vDSP_create_fftsetupD(log2n, kFFTRadix2);
-
-	double* windowedData = (double*)calloc(n, sizeof(double));
 	double* interleavedData = (double*)calloc(n, sizeof(double));
 	double* resultData = (double*)calloc(n, sizeof(double));
 	DSPDoubleSplitComplex interleaved;
@@ -144,89 +146,103 @@ void spectrogram(int size, double* data, int width, int log2bins, const char* pa
 	DSPDoubleSplitComplex result;
 	result.realp = resultData;
 	result.imagp = resultData + nOver2;
-	double maxmag = 0.;
+#else
+    auto fft_out = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (nOver2 + 1)));
+    auto fft_plan = fftw_plan_dft_r2c_1d(n, windowedData.data(), fft_out, FFTW_ESTIMATE);
+#endif
+    
+    double maxmag{0.0};
+    double hpos{static_cast<double>(nOver2)};
+    
+    for (int i = 0; i < width; ++i) {
+        const auto ihpos = static_cast<size_t>(hpos);
+        
+        // Find peak
+        double peak{1e-20};
+        for (int w = 0; w < n; ++w) {
+            double x = std::fabs(paddedData[w + ihpos]);
+            peak = std::max(peak, x);
+        }
+        
+        // Apply window function to the data
+        for (int64_t w = 0; w < n; ++w) {
+            windowedData[w] = window[w] * paddedData[w + ihpos];
+        }
+        
+        // Execute the FFT plan
+#ifdef SAPF_ACCELERATE
+    	vDSP_ctozD((DSPDoubleComplex*)windowedData.data(), 2, &interleaved, 1, nOver2);
+    	vDSP_fft_zropD(fftSetup, &interleaved, 1, &result, 1, log2n, kFFTDirection_Forward);
+    	dBMags[0] = result.realp[0] * scale;
+    	dBMags[numRealFreqs] = result.imagp[0] * scale;
+#else
+        fftw_execute(fft_plan);
+    	// Process FFT results - DC component (0 frequency)
+    	dBMags[0] = fft_out[0][0] * scale; // Real part
+    	dBMags[numRealFreqs] = fft_out[0][1] * scale; // Imaginary part
+#endif
+        
+        maxmag = std::max({maxmag, dBMags[0], dBMags[numRealFreqs]});
+        
+        // Process the remaining frequencies
+        for (int64_t j = 1; j < numRealFreqs; ++j) {
+#ifdef SAPF_ACCELERATE
+        	const double x = result.realp[j] * scale;
+        	const double y = result.imagp[j] * scale;
+#else
+            const double x = fft_out[j][0] * scale; // Real part
+            const double y = fft_out[j][1] * scale; // Imaginary part
+#endif
+            dBMags[j] = std::sqrt(x*x + y*y);     // Magnitude
+            maxmag = std::max(maxmag, dBMags[j]);
+        }
+
+        // Convert to dB scale
+        const double invmag{1.0};
+        auto to_dB = [invmag](double val) { return 20.0 * std::log10(val * invmag); };
+        
+        dBMags[0] = to_dB(dBMags[0]);
+        dBMags[numRealFreqs] = to_dB(dBMags[numRealFreqs]);
+        
+        for (int64_t j = 1; j < numRealFreqs; ++j) {
+            dBMags[j] = to_dB(dBMags[j]);
+        }
+        
+        // Set pixels for amplitude view
+        {
+            const double peakdB = to_dB(peak);
+            int peakColorIndex = static_cast<int>(256.0 - peakdB * (256.0 / dBfloor));
+            int peakIndex = static_cast<int>(heightOfAmplitudeView - peakdB * (heightOfAmplitudeView / dBfloor));
+            
+            peakIndex = std::clamp(peakIndex, 0, heightOfAmplitudeView);
+            peakColorIndex = std::clamp(peakColorIndex, 0, 255);
+
+            unsigned char* t = table.data() + 4 * peakColorIndex;
+            b.fillRect(i + border, border + 128 - peakIndex, 1, peakIndex, t[0], t[1], t[2]);
+        }
+        
+        // Set pixels for spectrogram
+        for (int j = 0; j < numRealFreqs; ++j) {
+            int colorIndex = static_cast<int>(256.0 - dBMags[j] * (256.0 / dBfloor)); 
+            colorIndex = std::clamp(colorIndex, 0, 255);
+            
+            unsigned char* t = table.data() + 4 * colorIndex;
+            b.setPixel(i + border, numRealFreqs - j + topOfSpectrum, t[0], t[1], t[2]);
+        }
+        
+        hpos += hopSize;
+    }
+    
+	b.write(path);
 	
-	double hpos = nOver2;
-	for (int i = 0; i < width; ++i) {
-		size_t ihpos = (size_t)hpos;
-		
-		// do analysis
-		// find peak
-		double peak = 1e-20;
-		for (int w = 0; w < n; ++w) {
-			double x = paddedData[w+ihpos];
-			x = fabs(x);
-			if (x > peak) peak = x;
-		}
-		
-		for (int64_t w = 0; w < n; ++w) windowedData[w] = window[w] * paddedData[w+ihpos];
-		
-		vDSP_ctozD((DSPDoubleComplex*)windowedData, 2, &interleaved, 1, nOver2);
-		
-		vDSP_fft_zropD(fftSetup, &interleaved, 1, &result, 1, log2n, kFFTDirection_Forward);
-		
-		dBMags[0] = result.realp[0] * scale;
-		dBMags[numRealFreqs] = result.imagp[0] * scale;
-		if (dBMags[0] > maxmag) maxmag = dBMags[0];
-		if (dBMags[numRealFreqs] > maxmag) maxmag = dBMags[numRealFreqs];
-		for (int64_t j = 1; j < numRealFreqs-1; ++j) {
-			double x = result.realp[j] * scale;
-			double y = result.imagp[j] * scale;
-			dBMags[j] = sqrt(x*x + y*y);
-			if (dBMags[j] > maxmag) maxmag = dBMags[j];
-		}
-
-		double invmag = 1.;
-		dBMags[0] = 20.*log2(dBMags[0]*invmag);
-		dBMags[numRealFreqs] = 20.*log10(dBMags[numRealFreqs]*invmag);
-		for (int64_t j = 0; j <= numRealFreqs-1; ++j) {
-			dBMags[j] = 20.*log10(dBMags[j]*invmag);
-		}
-		
-		
-		
-		// set pixels
-		{
-			double peakdB =  20.*log10(peak);
-			int peakColorIndex = 256. - peakdB * (256. / dBfloor);
-			int peakIndex = heightOfAmplitudeView - peakdB * (heightOfAmplitudeView / dBfloor);
-			if (peakIndex < 0) peakIndex = 0;
-			if (peakIndex > heightOfAmplitudeView) peakIndex = heightOfAmplitudeView;
-			if (peakColorIndex < 0) peakColorIndex = 0;
-			if (peakColorIndex > 255) peakColorIndex = 255;
-
-			unsigned char* t = table + 4*peakColorIndex;
-			fillRect(b, i+border, border+128-peakIndex, 1, peakIndex, t[0], t[1], t[2], t[3]);
-		}
-		
-		for (int j = 0; j < numRealFreqs; ++j) {
-			int colorIndex = 256. - dBMags[j] * (256. / dBfloor); 
-			if (colorIndex < 0) colorIndex = 0;
-			if (colorIndex > 255) colorIndex = 255;
-			
-			unsigned char* t = table + 4*colorIndex;
-			
-			setPixel(b, i+border, numRealFreqs-j+topOfSpectrum, t[0], t[1], t[2], t[3]);
-		}
-		
-		hpos += hopSize;
-	}
-
-	vDSP_destroy_fftsetupD(fftSetup);
-	
-	writeBitmap(b, path);
-	freeBitmap(b);
-	free(dBMags);
-	free(paddedData);
-	free(window);
-	free(windowedData);
+#ifdef SAPF_ACCELERATE
 	free(interleavedData);
 	free(resultData);
 #else
-        // TODO cross platform spectrogram
-#endif // SAPF_ACCELERATE
+    fftw_destroy_plan(fft_plan);
+    fftw_free(fft_out);
+#endif
 }
-
 
 static void makeColorTable(unsigned char* table)
 {
@@ -257,4 +273,3 @@ static void makeColorTable(unsigned char* table)
 	table[2] = 0;
 	table[3] = 255;
 }
-

@@ -5678,7 +5678,6 @@ static void bench_(Thread& th, Prim* prim)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef SAPF_AUDIOTOOLBOX
 #include "Spectrogram.hpp"
 
 std::atomic<int32_t> gSpectrogramFileCount = 0;
@@ -5700,9 +5699,17 @@ static void sgram_(Thread& th, Prim* prim)
 		snprintf(path, 1024, "%s/%s-%d.jpg", sgramDir, ((String*)filename.o())->s, (int)floor(dBfloor + .5));
 	} else {
 		int32_t count = ++gSpectrogramFileCount;
-		snprintf(path, 1024, "/tmp/sapf-%s-%04d.jpg", gSessionTime, count);
+		#ifdef _WIN32
+			const char* tempDir = getenv("TEMP");
+			if (!tempDir || strlen(tempDir)==0)
+				tempDir = getenv("TMP");
+			if (!tempDir || strlen(tempDir)==0)
+				tempDir = ".";
+		#else
+			const char* tempDir = "/tmp";
+		#endif
+		snprintf(path, 1024, "%s/sapf-%s-%04d.jpg", tempDir, gSessionTime, count);
 	}
-
 
 	list = list->pack(th);
 	P<Array> array = list->mArray;
@@ -5712,14 +5719,15 @@ static void sgram_(Thread& th, Prim* prim)
 	
 	{
 		char cmd[1100];
-		snprintf(cmd, 1100, "open \"%s\"", path);
+		#ifdef _WIN32
+			snprintf(cmd, 1100, "start \"\" \"%s\"", path);
+		#else
+			snprintf(cmd, 1100, "open \"%s\"", path);
+		#endif
 		system(cmd);
 	}
 	
 }
-#else
-// TODO
-#endif // SAPF_AUDIOTOOLBOX
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -7839,9 +7847,7 @@ void AddStreamOps()
 	vm.def(">sfo", 2, 0, sfwriteopen_, "(channels filename -->) writes the audio to a file and opens it in the default application.");
 	//vm.def("sf>", 2, sfread_);
 	DEF(bench, 1, 0, "(channels -->) prints the amount of CPU required to compute a segment of audio. audio must be of finite duration.")
-#ifdef SAPF_AUDIOTOOLBOX
 	vm.def("sgram", 3, 0, sgram_, "(signal dBfloor filename -->) writes a spectrogram to a file and opens it.");
-#endif // SAPF_AUDIOTOOLBOX
 
 	setSessionTime();
 

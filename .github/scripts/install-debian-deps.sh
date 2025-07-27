@@ -9,4 +9,6 @@ sudo apt install -y \
   libsndfile1-dev \
   libxsimd-dev \
   librtaudio-dev \
-  librtmidi-dev
+  librtmidi-dev \
+  libjpeg-dev \
+  libturbojpeg0-dev

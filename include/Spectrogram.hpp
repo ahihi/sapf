@@ -17,7 +17,7 @@
 #ifndef taggeddoubles_Spectrogram_h
 #define taggeddoubles_Spectrogram_h
 
-void spectrogram(int size, double* data, int width, int log2bins, const char* path, double dBfloor);
+void spectrogram(int size, const double* data, int width, int log2bins, const char* path, double dBfloor);
 
 
 #endif
