@@ -6152,11 +6152,23 @@ static void add_(Thread& th, Prim* prim)
 static void empty_(Thread& th, Prim* prim)
 {
 	P<List> list = th.popList("head : list");
-	list->force(th);
-	
-	P<Array> array = list->mArray;
-	int64_t size = array->size();
-	th.pushBool(size==0);
+
+	// even a non-empty list can have a non-empty chunk (or multiple) at the
+	// start, so we need to iterate through the chunks looking for a
+	// non-empty one. not sure if this is by design!
+	// https://github.com/ahihi/sapf/issues/32#issuecomment-3202227494
+	bool result = true;
+	while(list != nullptr) {
+		list->force(th);
+		P<Array> array = list->mArray;
+		if(array->size() > 0) {
+			result = false;
+			break;
+		}
+		list = list->nextp();
+	}
+
+	th.pushBool(result);
 }
 
 static void nonempty_(Thread& th, Prim* prim)
