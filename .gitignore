@@ -25,4 +25,5 @@ xcshareddata/
 *.xcuserstate
 .vscode/
 .idea/
+result
 subprojects/*/
