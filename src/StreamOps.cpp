@@ -7798,9 +7798,9 @@ void AddStreamOps()
 	DEF(muss, 1, 1, "(a --> b) puts a finite sequence into a random order.")
 
 	DEF(at, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return zero.") 
-	DEF(wrapAt, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return the value at the end point.") 
-	DEF(foldAt, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return the items from the cyclic sequence.") 
-	DEF(clipAt, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return items from the cyclic mirrored sequence.") 
+	DEF(wrapAt, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return the items from the cyclic sequence.")
+	DEF(foldAt, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return items from the cyclic mirrored sequence.")
+	DEF(clipAt, 2, 1, "(seq index(es) --> value(s)) looks up item(s) in sequence at index(es). out of range indexes return the value at the end point.")
 	DEF(degkey, 2, 1, "(degree scale --> converts scale degree(s) to keys, given a scale");
 	DEF(keydeg, 2, 1, "(key scale --> converts key(s) to scale degree(s), given a scale");
 
