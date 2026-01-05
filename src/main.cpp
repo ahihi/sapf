@@ -138,6 +138,8 @@ static void replLoop(Thread th) {
 
 int main (int argc, const char * argv[]) 
 {
+	setlocale(LC_ALL, "");
+
 	post("------------------------------------------------\n");	
 	post("A tool for the expression of sound as pure form.\n");	
 	post("------------------------------------------------\n");	
