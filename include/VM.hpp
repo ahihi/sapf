@@ -34,6 +34,10 @@
 
 extern pthread_mutex_t gHelpMutex;
 
+#define PROMPT_MAX 256
+extern char *prompt_default;
+extern char *promptstr;
+
 class Unlocker
 {
 	pthread_mutex_t* mLock;
