@@ -45,7 +45,7 @@
               fftw
               libedit
               libsndfile
-              # oscpack
+              oscpack
               rtaudio_6
               rtmidi
               xsimd

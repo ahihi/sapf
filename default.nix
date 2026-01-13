@@ -8,7 +8,7 @@
   fftw,
   libedit,
   libsndfile,
-  # oscpack,
+  oscpack,
   pkg-config,
   rtaudio_6,
   rtmidi,
@@ -27,7 +27,7 @@ stdenv.mkDerivation (finalAttrs: {
     fftw
     libedit
     libsndfile
-    # oscpack
+    oscpack
     rtaudio_6
     rtmidi
     xsimd
@@ -43,7 +43,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   doCheck = true;
 
-  mesonFlags = [ "-Dosc=false" ]; # TODO
+  mesonFlags = [];
   
   meta = {
     homepage = "https://github.com/ahihi/sapf";
