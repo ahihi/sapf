@@ -15,7 +15,9 @@
 
 class OscListener : public osc::OscPacketListener {
 public:
-	void putMapping(std::string address, P<Ref> ref) {
+	OscListener(Thread& th) : thread(th) {}
+
+	void putMapping(std::string address, P<Fun> fun) {
 		auto search = mappings.find(address);
 		if(search != mappings.end()) {
 			std::cout << "release existing mapping" << std::endl;
@@ -23,8 +25,8 @@ public:
 		}
 
 		std::cout << "put mapping" << std::endl;
-		ref->retain();
-		mappings[address] = ref;
+		fun->retain();
+		mappings[address] = fun;
 	}
 
 	void removeMapping(std::string address) {
@@ -58,16 +60,46 @@ protected:
 			}
 
 			// std::cout << "found " << m.AddressPattern() << std::endl;
-			auto& ref = search->second;
+			auto& fun = search->second;
 
-			// if(!ref->o.isVList()) {
-			// 	P<List> list = reinterpret_cast<P<List> >(ref->o);
-			// 	int64_t len = min(list->length, m.ArgumenCount());
+			thread.clearStack();
 
-			//      // TODO...
-			// } else {
-				ref->set(m.ArgumentsBegin()->AsFloat());
-			// }
+			uint32_t num_args = m.ArgumentCount();
+			// TODO: could perhaps reuse the list instead of allocating every time
+			P<List> args = new List(itemTypeV, num_args);
+
+			for(auto it = m.ArgumentsBegin(); it != m.ArgumentsEnd(); it++) {
+				auto arg = *it;
+				if(arg.IsFloat()) {
+					args->add(arg.AsFloat());
+				} else if(arg.IsDouble()) {
+					args->add(arg.AsDouble());
+				} else if(arg.IsInt32()) {
+					args->add(arg.AsInt32());
+				} else if(arg.IsTimeTag()) {
+					args->add(arg.AsTimeTag());
+				} else if(arg.IsInt64()) {
+					args->add(arg.AsInt64());
+				} else if(arg.IsBool()) {
+					args->add(arg.AsBool());
+				} else if(arg.IsString()) {
+					args->add(new String(arg.AsString()));
+				} else {
+					std::cout << "unsupported argument type: " << arg.TypeTag() << std::endl;
+				}
+			}
+
+			thread.push(args);
+			try {
+				fun->run(thread);
+			} catch (int err) {
+				// copied from VM.cpp; TODO: maybe refactor
+				if (err <= -1000 && err > -1000 - kNumErrors) {
+					post("\nerror: %s\n", errString[-1000 - err]);
+				} else {
+					post("\nerror: %d\n", err);
+				}
+			}
 		} catch(osc::Exception& e) {
 			// any parsing errors such as unexpected argument types, or
 			// missing arguments get thrown as exceptions.
@@ -76,13 +108,15 @@ protected:
 		}
 	}
 
-	std::unordered_map<std::string,P<Ref>> mappings;
+	std::unordered_map<std::string,P<Fun>> mappings;
+	Thread thread;
 };
 
 class OscHandler {
 public:
-	OscHandler(unsigned long addr, int port) :
-		endpointName(addr, port)
+	OscHandler(Thread& thread, unsigned long addr, int port) :
+		endpointName(addr, port),
+		listener(thread)
 	{}
 
 	~OscHandler() {
@@ -104,6 +138,7 @@ public:
 
 		std::cout << "start listening" << std::endl;
 		sock = std::make_unique<UdpListeningReceiveSocket>(endpointName, &listener);
+
 		thread = std::thread([&] {
 			sock->Run();
 		});
@@ -132,10 +167,11 @@ public:
 };
 
 // using a map instead of unordered_map because hashing tuples is a bit of a pain
+// (address, port) -> handler
 std::map<std::tuple<unsigned long,int>,OscHandler> oscHandlers;
 
 static void oscmap_(Thread& th, Prim* prim) {
-	P<Ref> ref = th.popRef("oscmap : ref");
+	P<Fun> fun = th.popFun("oscmap : fun");
 	P<String> oscAddress = th.popString("oscmap : oscAddress");
 	int port = (int) th.popInt("oscmap : port");
 	P<String> netAddress = th.popString("oscmap : netAddress");
@@ -144,11 +180,11 @@ static void oscmap_(Thread& th, Prim* prim) {
 	auto key = std::make_tuple(addr, port);
 	auto search = oscHandlers.find(key);
 	if(search == oscHandlers.end()) {
-		search = oscHandlers.emplace(key, OscHandler(addr, port)).first;
+		search = oscHandlers.emplace(key, OscHandler(th, addr, port)).first;
 		search->second.startListening();
 	}
 
-	search->second.listener.putMapping(oscAddress->s, ref);
+	search->second.listener.putMapping(oscAddress->s, fun);
 }
 
 static void oscunmap_(Thread& th, Prim* prim) {
@@ -180,7 +216,7 @@ static void oscunmap_(Thread& th, Prim* prim) {
 void AddOscOps() {
 #ifdef SAPF_OSC
 	vm.addBifHelp("\n*** OSC control ***");
-	DEF(oscmap, 4, 0, "(netAddress port oscAddress ref -->) map an OSC message to a Ref");
+	DEF(oscmap, 4, 0, "(netAddress port oscAddress fun -->) map an OSC message to a function");
 	DEF(oscunmap, 3, 0, "(netAddress port oscAddress -->) unmap an OSC message");
 #endif // SAPF_OSC
 }
