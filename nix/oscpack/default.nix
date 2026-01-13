@@ -41,8 +41,8 @@ stdenv.mkDerivation (finalAttrs: {
     echo 'Name: oscpack' >> $pcfile
     echo 'Description: Open Sound Control packet manipulation library' >> $pcfile
     echo 'Version: 1.1.0' >> $pcfile
-    echo 'Libs: -L''${libdir}' -l:''${libdir}/liboscpack.a >> $pcfile
-    echo 'Cflags: -I''${includedir}/liboscpack' >> $pcfile
+    echo 'Libs: -L''${libdir}' -loscpack >> $pcfile
+    echo 'Cflags: -I''${includedir}' >> $pcfile
 
     runHook postInstall
   '';
