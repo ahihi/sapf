@@ -201,7 +201,7 @@ VM::~VM()
 {
 }
 
-char *prompt_default = "sapf>";
+char *prompt_default = "sapf> ";
 char *promptstr = NULL;
 char whichprompt[PROMPT_MAX+2];
 static const char* prompt() 
@@ -209,7 +209,7 @@ static const char* prompt()
   if(promptstr){
   	return promptstr;
   } else {
-	if( (promptstr = getenv("SAPFPROMPT")) == NULL ){
+	if( (promptstr = getenv("SAPF_PROMPT")) == NULL ){
 		promptstr = prompt_default;
 	}
 	return promptstr;
