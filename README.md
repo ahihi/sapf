@@ -1,10 +1,53 @@
 # sapf, cross-platform edition
 
-this is a highly work-in-progress fork of James McCartney's [sapf](https://github.com/lfnoise/sapf) (Sound As Pure Form) which aims to implement cross-platform alternatives for the various macOS libraries used in the original codebase. for the time being, the top priority platform is Linux.
+this is a fork of James McCartney's [sapf](https://github.com/lfnoise/sapf) (Sound As Pure Form) which aims to implement cross-platform alternatives for the various macOS libraries used in the original codebase. it runs on (at least!) Linux, macOS and Windows.
 
 [original README](README.txt)
 
 ## building
+
+### building with Nix
+
+> [!NOTE]
+> the Nix build works on NixOS and macOS. on other Linux distros, [problems](https://github.com/ahihi/sapf/issues/38) have been reported, so you may want to build manually instead.
+
+if using flakes, you can add sapf to your inputs as follows:
+
+```nix
+inputs.sapf.url = "git+https://github.com/ahihi/sapf?submodules=1";
+inputs.sapf.inputs.nixpkgs.follows = "nixpkgs-unstable"; # optional
+```
+
+the sapf flake provides
+
+- a package `sapf.packages.default`
+- the nixpkgs overlay `sapf.overlays.default`, which contains the package `sapf`
+
+otherwise, you can clone this repo and run
+
+```shell
+nix build .?submodules=1
+```
+
+in the top level directory.
+
+### building manually
+
+if not using Nix, you will need to install dependencies manually, e.g. via a package manager. the mandatory dependencies for a portable build are currently:
+
+- libedit
+- libsndfile
+- fftw
+- rtaudio
+- rtmidi
+- libxsimd
+- libjpeg-turbo
+
+for installing dependencies, you can refer to the CI scripts in this repo:
+
+- [install-debian-deps.sh](.github/scripts/install-debian-deps.sh) (Debian, Ubuntu, Mint, etc.)
+- [install-macos-native-deps.sh](.github/scripts/install-macos-native-deps.sh) (macOS with Homebrew, for builds using native macOS libraries)
+- [install-macos-cross-platform-deps.sh](.github/scripts/install-macos-cross-platform-deps.sh) (macOS with Homebrew, for builds using cross platform libraries)
 
 Ensure submodules are initialized if you didn't clone with `--recursive`:
 ```shell
@@ -12,10 +55,9 @@ git submodule init
 git submodule update
 ```
 
-for Nix users, a flake is included. after [enabling flakes](https://nixos.wiki/wiki/Flakes), simply run:
+then, you can build by running:
 
 ```shell
-nix develop
 meson setup --buildtype release build
 meson compile -C build
 ```
@@ -34,22 +76,6 @@ meson compile -C build
 Note you can view the current buildtype setting via `meson configure build`.
 
 You can specify different targets defined in the meson.build file such as `meson compile sapf_x86_64_v3 -C build`.
-
-if not using Nix, you will need to install dependencies manually instead of the `nix develop`. the mandatory dependencies for a portable build are currently:
-
-- libedit
-- libsndfile
-- fftw
-- rtaudio
-- rtmidi
-- libxsimd
-- libjpeg-turbo
-
-for installing dependencies, you can refer to the CI scripts in this repo:
-
-- [install-debian-deps.sh](.github/scripts/install-debian-deps.sh) (Debian, Ubuntu, Mint, etc.)
-- [install-macos-native=deps.sh](.github/scripts/install-macos-native-deps.sh) (macOS with Homebrew, for builds using native macOS libraries)
-- [install-macos-cross-platform-deps.sh](.github/scripts/install-macos-cross-platform-deps.sh) (macOS with Homebrew, for builds using cross platform libraries)
 
 ### building with Docker
 
