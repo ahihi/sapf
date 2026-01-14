@@ -1,12 +1,12 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, nixpkgs, flake-utils, ... }:
     let
-      llvmPackages = pkgs: pkgs.llvmPackages_16;
+      llvmPackages = pkgs: pkgs.llvmPackages;
     in
       {
         overlays.default = final: prev:

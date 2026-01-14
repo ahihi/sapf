@@ -20,6 +20,10 @@ stdenv.mkDerivation (finalAttrs: {
     cmake
   ];
 
+  patches = [
+    ../../subprojects/packagefiles/oscpack_1_1_0/cmake_minimum_version.patch
+  ];
+
   installPhase = ''
     runHook preInstall
 
