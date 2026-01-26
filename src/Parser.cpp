@@ -16,6 +16,7 @@
 
 #include "Parser.hpp"
 #include "Opcode.hpp"
+#include <charconv>
 #include <ctype.h>
 #include <climits>
 #include <cmath>
@@ -136,7 +137,8 @@ static bool parseFloat(Thread& th, Z& result)
 		while (isdigit(c)) { c = th.getc(); }
 	}
 
-	th.toToken(start, (int)(th.curline() - start));
+	const int len = (int)(th.curline() - start);
+	th.toToken(start, len);
 	
 	bool sawpi = false;
 	bool sawmega = false;
@@ -166,7 +168,14 @@ static bool parseFloat(Thread& th, Z& result)
 		th.unget(1);
 	}
 
-	double x = strtod(th.token, nullptr);
+	double x = 0.0;
+	const char *tokenStart = th.token;
+	const char *tokenEnd = th.token + len - 1;
+	const auto parsed = std::from_chars(tokenStart, tokenEnd, x);
+	if(parsed.ec != std::errc{} || parsed.ptr != tokenEnd) {
+		return false;
+	}
+
 	if (sawpi) x *= M_PI;
 	else if (sawmega) x *= 1e6;
 	else if (sawkilo) x *= 1e3;

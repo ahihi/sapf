@@ -138,7 +138,14 @@ static void replLoop(Thread th) {
 
 int main (int argc, const char * argv[]) 
 {
+	// support non-ASCII input
 	setlocale(LC_ALL, "");
+
+	// force the decimal point to be '.' regardless of locale. we already
+	// have locale-independent float parsing, but there is a lot of
+	// printf("%f") throughout the codebase, so this is the easier fix for
+	// now.
+	setlocale(LC_NUMERIC, "C");
 
 	post("------------------------------------------------\n");	
 	post("A tool for the expression of sound as pure form.\n");	
