@@ -326,11 +326,14 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 	soundFile = nullptr;
 	
 	if (openIt) {
-		char cmd[1100];
-		#ifdef _WIN32
-			snprintf(cmd, 1100, "start \"\" \"%s\"", path);
+		static const size_t cmdMaxLen = 1100;
+		char cmd[cmdMaxLen];
+		#if defined(_WIN32)
+			snprintf(cmd, cmdMaxLen, "start \"\" \"%s\"", path);
+		#elif defined(__APPLE__) && defined(__MACH__)
+			snprintf(cmd, cmdMaxLen, "open \"%s\"", path);
 		#else
-			snprintf(cmd, 1100, "open \"%s\"", path);
+			snprintf(cmd, cmdMaxLen, "xdg-open \"%s\"", path);
 		#endif
 		system(cmd);
 	}
