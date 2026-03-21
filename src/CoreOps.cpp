@@ -1133,7 +1133,13 @@ static void prelude_(Thread& th, Prim* prim)
 	char cmd[cmdMaxLen];
 	
 	if (vm.prelude_file) {
-		snprintf(cmd, cmdMaxLen, "open %s\n", vm.prelude_file);
+		#if defined(_WIN32)
+			snprintf(cmd, cmdMaxLen, "start \"\" \"%s\"", vm.prelude_file);
+		#elif defined(__APPLE__) && defined(__MACH__)
+			snprintf(cmd, cmdMaxLen, "open %s\n", vm.prelude_file);
+		#else
+			snprintf(cmd, cmdMaxLen, "xdg-open %s\n", vm.prelude_file);
+		#endif
 		system(cmd);
 	} else {
 		printf("no prelude file.\n");
@@ -1147,7 +1153,13 @@ static void examples_(Thread& th, Prim* prim)
 	
 	const char* examples_file = getenv("SAPF_EXAMPLES");
 	if (examples_file) {
-		snprintf(cmd, cmdMaxLen, "open %s\n", examples_file);
+		#if defined(_WIN32)
+			snprintf(cmd, cmdMaxLen, "start \"\" \"%s\"", examples_file);
+		#elif defined(__APPLE__) && defined(__MACH__)
+			snprintf(cmd, cmdMaxLen, "open %s\n", examples_file);
+		#else
+			snprintf(cmd, cmdMaxLen, "xdg-open %s\n", examples_file);
+		#endif
 		system(cmd);
 	} else {
 		printf("no examples file.\n");
@@ -1161,7 +1173,13 @@ static void readme_(Thread& th, Prim* prim)
 	
 	const char* readme_file = getenv("SAPF_README");
 	if (readme_file) {
-		snprintf(cmd, cmdMaxLen, "open %s\n", readme_file);
+		#if defined(_WIN32)
+			snprintf(cmd, cmdMaxLen, "start \"\" \"%s\"", readme_file);
+		#elif defined(__APPLE__) && defined(__MACH__)
+			snprintf(cmd, cmdMaxLen, "open %s\n", readme_file);
+		#else
+			snprintf(cmd, cmdMaxLen, "xdg-open %s\n", readme_file);
+		#endif
 		system(cmd);
 	} else {
 		printf("no readme file.\n");
@@ -1174,7 +1192,13 @@ static void logfile_(Thread& th, Prim* prim)
 	char cmd[cmdMaxLen];
 	
 	if (vm.log_file) {
-		snprintf(cmd, cmdMaxLen, "open %s\n", vm.log_file);
+		#if defined(_WIN32)
+			snprintf(cmd, cmdMaxLen, "start \"\" \"%s\"", vm.log_file);
+		#elif defined(__APPLE__) && defined(__MACH__)
+			snprintf(cmd, cmdMaxLen, "open %s\n", vm.log_file);
+		#else
+			snprintf(cmd, cmdMaxLen, "xdg-open %s\n", vm.log_file);
+		#endif
 		system(cmd);
 	} else {
 		printf("no log file.\n");
