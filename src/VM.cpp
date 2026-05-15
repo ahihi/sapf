@@ -654,7 +654,7 @@ P<TYPE> Thread::pop##TYPE(const char* msg) \
 }
 
 POPREFTYPEDEF(Ref);
-POPTYPEDEF(ZRef);
+POPREFTYPEDEF(ZRef);
 POPTYPEDEF(String);
 POPTYPEDEF(List);
 POPFUNTYPEDEF(Fun);

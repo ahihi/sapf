@@ -949,7 +949,7 @@ struct ZCtl : public ZeroInputUGen<ZCtl>
 
 static void zctl_(Thread& th, Prim* prim)
 {
-	P<ZRef> zref = th.popZRef("mctl : zref");
+	P<ZRef> zref = th.popZRef("zctl : zref");
 
 	th.push(new List(new ZCtl(th, zref)));
 }
