@@ -5719,10 +5719,12 @@ static void sgram_(Thread& th, Prim* prim)
 	
 	{
 		char cmd[1100];
-		#ifdef _WIN32
+		#if defined(_WIN32)
 			snprintf(cmd, 1100, "start \"\" \"%s\"", path);
-		#else
+		#elif defined(__APPLE__) && defined(__MACH__)
 			snprintf(cmd, 1100, "open \"%s\"", path);
+		#else
+			snprintf(cmd, 1100, "xdg-open \"%s\"", path);
 		#endif
 		system(cmd);
 	}
