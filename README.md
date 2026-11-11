@@ -1,5 +1,8 @@
 # sapf, cross-platform edition
 
+> [!NOTE]
+> moved to https://codeberg.org/pulu/sapfo
+
 this is a fork of James McCartney's [sapf](https://github.com/lfnoise/sapf) (Sound As Pure Form) which aims to implement cross-platform alternatives for the various macOS libraries used in the original codebase. it runs on (at least!) Linux, macOS and Windows.
 
 [original README](README.txt)
